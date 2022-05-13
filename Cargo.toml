@@ -1,0 +1,16 @@
+[package]
+name = "tensorism-gen"
+version = "0.1.0"
+authors = ["Eddy Cizeron <eddy.cizeron@shift-technology.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[registries]
+local = { index = "C:\\Users\\cizere\\Sources\\tensorism" }
+
+[dependencies]
+"syn" = "1.0.92"
+"quote" = "1.0.18"
+#"tensorism" = "*"
