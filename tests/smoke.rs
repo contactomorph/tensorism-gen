@@ -10,7 +10,7 @@ fn format_make_macro() {
         "{ \
             let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
             let j_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).1.into() ; \
-            ((0usize .. i_length).flat_map(move | i | { (0usize .. j_length).map(move | j | { (i, j,) }) })\
+            ((0usize .. i_length).flat_map(move | i | (0usize .. j_length).map(move | j | (i, j,)))\
             .map(| (i, j,) | { (* unsafe { a.get_unchecked(i, j) }) + i as f64 })).sum() \
         } ",
         string);
@@ -19,8 +19,10 @@ fn format_make_macro() {
         "{ \
             let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
             let j_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).1.into() ; \
-            (0usize .. i_length).map(move | i | { (i,) }).map(| (i,) | { ((0usize .. j_length).map(move | j | { (j,) })\
-            .map(| (j,) | { (* unsafe { a.get_unchecked(i, j) }) + (* unsafe { b.get_unchecked(j) }) })) }) \
+            (0usize .. i_length).map(move | i | (i,)).map(| (i,) | { (\
+                (0usize .. j_length).map(move | j | (j,))\
+                .map(| (j,) | { (* unsafe { a.get_unchecked(i, j) }) + (* unsafe { b.get_unchecked(j) }) })\
+            ) }) \
         } ",
         string);
 }

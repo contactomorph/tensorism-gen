@@ -23,9 +23,9 @@ fn sequentialize_tensor_func(
             let length_name = format_ident!("{}_length", index);
             let span = index.span();
             content = if i == 0 {
-                quote_spanned! {span => (0usize..#length_name).map(move |#index| { #content })}
+                quote_spanned! {span => (0usize..#length_name).map(move |#index| #content)}
             } else {
-                quote_spanned! {span => (0usize..#length_name).flat_map(move |#index| { #content })}
+                quote_spanned! {span => (0usize..#length_name).flat_map(move |#index| #content)}
             }
         }
         quote_spanned! {span =>  #content.map(|#indexes_tuple| { #stream }) }
