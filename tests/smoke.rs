@@ -13,7 +13,8 @@ fn format_make_macro() {
             ((0usize .. i_length).flat_map(move | i | (0usize .. j_length).map(move | j | (i, j,)))\
             .map(| (i, j,) | { (* unsafe { a.get_unchecked(i, j) }) + i as f64 })).sum() \
         } ",
-        string);
+        string
+    );
     let string = tensorism_string_for_make! {i $ (j $ a[i, j] + b[j])};
     assert_eq!(
         "{ \
@@ -35,13 +36,12 @@ fn count_all_chars<'a>(it: impl Iterator<Item = &'a String>) -> usize {
 fn run_make_macro() {
     let a = ShapeBuilder::with_static::<10>()
         .with_first()
-        .prepare()
-        .fill(&456i64);
+        .define(|(i, j)| i as i64 * (j + 1) as i64);
     let sum: i64 = tensorism_make! {(i j $ a[i, j] + i as i64).sum()};
-    assert_eq!(46050i64, sum);
+    assert_eq!(2925i64, sum);
 
     let result: i64 = tensorism_make! {Iterator::sum(i $ Iterator::min(j $ a[i, j]).unwrap())};
-    assert_eq!(4560i64, result);
+    assert_eq!(45i64, result);
 
     let messages = ["Hello", "World", "How", "are you?"].map(|s| String::from_str(s).unwrap());
     let c = ShapeBuilder::with_static::<4>()
