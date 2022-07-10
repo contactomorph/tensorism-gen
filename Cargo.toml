@@ -8,9 +8,10 @@ edition = "2018"
 proc-macro = true
 
 [registries]
-local = { index = "C:\\Users\\cizere\\Sources\\tensorism" }
+local = { index = "..\\tensorism" }
 
 [dependencies]
 "syn" = "1.0.92"
 "quote" = "1.0.18"
-#"tensorism" = "*"
+"proc-macro2" = "1.0"
+"tensorism" = { version = "*", path = "..\\tensorism" }
