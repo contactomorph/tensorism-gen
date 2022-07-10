@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use proc_macro2::{Ident, Span, TokenTree};
+use std::collections::HashMap;
 
 pub struct EinsteinFunction {
     pub span: Span,

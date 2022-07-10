@@ -1,27 +1,27 @@
 use std::str::FromStr;
 
-use tensorism::{shapes::ShapeBuilder, building::TensorBuilder};
+use tensorism::{building::TensorBuilder, shapes::ShapeBuilder};
 use tensorism_gen::{tensorism_make, tensorism_string_for_make};
 
 #[test]
 fn format_make_macro() {
     let string = tensorism_string_for_make! {(i j $ a[i, j] + i as f64).sum()};
     assert_eq!(
-        "{\n    \
-            let i_length : usize = :: tensorism :: tensors :: Tensor ::\n    dims(& a).0.into() ; \
-            let j_length : usize = :: tensorism :: tensors ::\n    Tensor :: dims(& a).1.into() ;\n    \
-            ((0usize ..\n    i_length).flat_map(move | i |\n    {\n        (0usize .. j_length).map(move | j | { (i, j,) })\n    })\
-            .map(| (i, j,) |\n    { (* unsafe { a.get_unchecked(i, j) }) + i as f64 })).sum()\n\
-        }",
+        "{ \
+            let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
+            let j_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).1.into() ; \
+            ((0usize .. i_length).flat_map(move | i | { (0usize .. j_length).map(move | j | { (i, j,) }) })\
+            .map(| (i, j,) | { (* unsafe { a.get_unchecked(i, j) }) + i as f64 })).sum() \
+        } ",
         string);
     let string = tensorism_string_for_make! {i $ (j $ a[i, j] + b[j])};
     assert_eq!(
-        "{\n    \
-            let i_length : usize = :: tensorism :: tensors :: Tensor ::\n    dims(& a).0.into() ; \
-            let j_length : usize = :: tensorism :: tensors ::\n    Tensor :: dims(& a).1.into() ;\n    \
-            (0usize ..\n    i_length).map(move | i |\n    {\n        (i,)\n    }).map(| (i,) |\n    {\n        ((0usize ..\n        j_length).map(move | j |\n        {\n            (j,)\n        })\
-            .map(| (j,) |\n        {\n            (* unsafe { a.get_unchecked(i, j) }) +\n            (* unsafe { b.get_unchecked(j) })\n        }))\n    })\n\
-        }",
+        "{ \
+            let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
+            let j_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).1.into() ; \
+            (0usize .. i_length).map(move | i | { (i,) }).map(| (i,) | { ((0usize .. j_length).map(move | j | { (j,) })\
+            .map(| (j,) | { (* unsafe { a.get_unchecked(i, j) }) + (* unsafe { b.get_unchecked(j) }) })) }) \
+        } ",
         string);
 }
 
@@ -41,8 +41,7 @@ fn run_make_macro() {
     let result: i64 = tensorism_make! {Iterator::sum(i $ Iterator::min(j $ a[i, j]).unwrap())};
     assert_eq!(4560i64, result);
 
-    let messages = ["Hello", "World", "How", "are you?"]
-        .map(|s| String::from_str(s).unwrap());
+    let messages = ["Hello", "World", "How", "are you?"].map(|s| String::from_str(s).unwrap());
     let c = ShapeBuilder::with_static::<4>()
         .prepare()
         .append_array(messages)

@@ -1,5 +1,5 @@
-use proc_macro2::{Delimiter, Group, Ident, Punct, Span, TokenStream, TokenTree};
 use crate::types::*;
+use proc_macro2::{Delimiter, Group, Ident, Punct, Span, TokenStream, TokenTree};
 
 fn parse_punct(
     punct: &Punct,
@@ -108,9 +108,7 @@ fn parse_tensor_func(
     Ok(())
 }
 
-pub fn parse(
-    input: proc_macro::TokenStream,
-) -> Result<(EinsteinFunction, IndexUse), TokenStream> {
+pub fn parse(input: proc_macro::TokenStream) -> Result<(EinsteinFunction, IndexUse), TokenStream> {
     let input: TokenStream = input.into();
     let mut func = EinsteinFunction::new(Span::call_site(), Vec::new());
     let mut index_use = IndexUse::new();

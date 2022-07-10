@@ -8,12 +8,21 @@ extern crate quote;
 
 use proc_macro2::{Literal, TokenStream, TokenTree};
 
-mod types;
 mod parsing;
 mod sequentialization;
+mod types;
 
 use parsing::parse;
 use sequentialization::sequentialize;
+
+fn simplify(text: &String) -> String {
+    let mut result = String::new();
+    text.split('\n').map(|s| s.trim()).for_each(|s| {
+        result.extend_one(s);
+        result.extend_one(' ')
+    });
+    result
+}
 
 #[proc_macro]
 pub fn tensorism_make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -29,7 +38,7 @@ pub fn tensorism_string_for_make(input: proc_macro::TokenStream) -> proc_macro::
         Err(invalid_stream) => invalid_stream.into(),
         Ok((func, index_use)) => {
             let output = sequentialize(func, index_use);
-            let string = output.to_string();
+            let string = simplify(&output.to_string());
             let mut output = TokenStream::new();
             output.extend_one(TokenTree::Literal(Literal::string(string.as_str())));
             output.into()

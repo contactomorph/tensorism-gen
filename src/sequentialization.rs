@@ -1,5 +1,5 @@
-use proc_macro2::{Delimiter, Group, Ident, Literal, Span, TokenStream, TokenTree};
 use crate::types::*;
+use proc_macro2::{Delimiter, Group, Ident, Literal, Span, TokenStream, TokenTree};
 
 fn sequentialize_parens_group(span: Span, group: Vec<EinsteinAlternative>) -> TokenTree {
     let inner_func = EinsteinFunction::from_group(span, group);
@@ -8,7 +8,11 @@ fn sequentialize_parens_group(span: Span, group: Vec<EinsteinAlternative>) -> To
     TokenTree::Group(Group::new(Delimiter::Parenthesis, inner_stream))
 }
 
-fn sequentialize_tensor_func(span: Span, inverted_indexes: Vec<Ident>, stream: TokenStream) -> TokenTree {
+fn sequentialize_tensor_func(
+    span: Span,
+    inverted_indexes: Vec<Ident>,
+    stream: TokenStream,
+) -> TokenTree {
     let index_count = inverted_indexes.len();
     let func_stream = if index_count > 0 {
         let mut direct_indexes = inverted_indexes.clone();
@@ -52,7 +56,11 @@ fn sequentialize_body(func: EinsteinFunction, stream: &mut TokenStream) {
             }
         }
     }
-    stream.extend_one(sequentialize_tensor_func(func.span, func.inverted_indexes, content));
+    stream.extend_one(sequentialize_tensor_func(
+        func.span,
+        func.inverted_indexes,
+        content,
+    ));
 }
 
 fn sequentialize_header(index_use: IndexUse) -> TokenStream {
@@ -68,10 +76,7 @@ fn sequentialize_header(index_use: IndexUse) -> TokenStream {
     output
 }
 
-pub fn sequentialize(
-    func: EinsteinFunction,
-    index_use: IndexUse,
-) -> TokenStream {
+pub fn sequentialize(func: EinsteinFunction, index_use: IndexUse) -> TokenStream {
     let mut stream = sequentialize_header(index_use);
     sequentialize_body(func, &mut stream);
     let mut output = TokenStream::new();
