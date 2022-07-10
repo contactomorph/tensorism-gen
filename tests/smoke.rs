@@ -41,12 +41,11 @@ fn run_make_macro() {
     let result: i64 = tensorism_make! {(i $ (j $ a[i, j]).min().unwrap()).sum()};
     assert_eq!(4560i64, result);
 
-    let mut messages = ["Hello", "World", "How", "are you?"]
-        .map(|s| String::from_str(s).unwrap())
-        .to_vec();
+    let messages = ["Hello", "World", "How", "are you?"]
+        .map(|s| String::from_str(s).unwrap());
     let c = ShapeBuilder::with_static::<4>()
         .prepare()
-        .append(&mut messages)
+        .append_array(messages)
         .generate();
     let all_chars_count = tensorism_make! {count_all_chars(i $ &c[i])};
     assert_eq!(21, all_chars_count);
