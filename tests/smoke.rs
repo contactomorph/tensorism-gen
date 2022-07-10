@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use tensorism::{shapes::ShapeBuilder, tensors::TensorBuilder};
+use tensorism::{shapes::ShapeBuilder, building::TensorBuilder};
 use tensorism_gen::{tensorism_make, tensorism_string_for_make};
 
 #[test]
@@ -38,7 +38,7 @@ fn run_make_macro() {
     let sum: i64 = tensorism_make! {(i j $ a[i, j] + i as i64).sum()};
     assert_eq!(46050i64, sum);
 
-    let result: i64 = tensorism_make! {(i $ (j $ a[i, j]).min().unwrap()).sum()};
+    let result: i64 = tensorism_make! {Iterator::sum(i $ Iterator::min(j $ a[i, j]).unwrap())};
     assert_eq!(4560i64, result);
 
     let messages = ["Hello", "World", "How", "are you?"]
