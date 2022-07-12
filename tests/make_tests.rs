@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use tensorism::{building::TensorBuilder, shapes::ShapeBuilder};
-use tensorism_gen::{make, format_for_make};
+use tensorism_gen::{format_for_make, make};
 
 #[test]
 fn format_make_macro() {

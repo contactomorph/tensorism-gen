@@ -1,10 +1,10 @@
 use crate::types::*;
-use proc_macro2::{Delimiter, Group, Ident, Punct, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Group, Ident, Punct, TokenStream, TokenTree};
 
 fn parse_punct(
-    punct: &Punct,
+    punct: Punct,
     tokens: &mut impl Iterator<Item = TokenTree>,
-    func: &mut EinsteinFunction,
+    sequence: &mut EinsteinSequence,
     index_use: &mut IndexUse,
 ) -> Result<(), TokenStream> {
     let c = punct.as_char();
@@ -14,17 +14,18 @@ fn parse_punct(
         };
         return Err(invalid_stream);
     } else if c == '$' {
-        let inverted_indexes = func.retrieve_all_indexes();
-        let mut new_einst = EinsteinFunction::new(punct.span(), inverted_indexes);
-        parse_tensor_func(tokens, &mut new_einst, index_use)?;
-        func.content.push(EinsteinAlternative::Func(new_einst));
+        let inverted_indexes = sequence.extract_previous_identifiers();
+        let mut new_sequence = EinsteinSequence::naked(punct.span());
+        parse_sequence(tokens, &mut new_sequence, index_use)?;
+        let func = EinsteinFunction::new(inverted_indexes, new_sequence);
+        sequence.content.push(EinsteinAlternative::Func(func));
     } else {
-        func.push_token(TokenTree::Punct(punct.clone()));
+        sequence.push_token(TokenTree::Punct(punct.clone()));
     }
     Ok(())
 }
 
-fn parse_tensor_indexing(group: &Group) -> Result<Vec<Ident>, TokenStream> {
+fn parse_tensor_indexing(group: Group) -> Result<Vec<Ident>, TokenStream> {
     let mut indexes = Vec::new();
     for token in group.stream() {
         match token {
@@ -49,8 +50,8 @@ fn parse_tensor_indexing(group: &Group) -> Result<Vec<Ident>, TokenStream> {
 }
 
 fn parse_group(
-    group: &Group,
-    func: &mut EinsteinFunction,
+    group: Group,
+    sequence: &mut EinsteinSequence,
     index_use: &mut IndexUse,
 ) -> Result<(), TokenStream> {
     match group.delimiter() {
@@ -62,17 +63,18 @@ fn parse_group(
         }
         Delimiter::Bracket => {
             if let Some(EinsteinAlternative::Tree(TokenTree::Ident(tensor_name))) =
-                func.content.last()
+                sequence.content.last()
             {
                 let tensor_name = tensor_name.clone();
+                let span = group.span();
                 let indexes = parse_tensor_indexing(group)?;
                 for (position, index_name) in indexes.iter().enumerate() {
                     index_use.push(index_name.clone(), tensor_name.clone(), position)
                 }
-                func.content.pop();
-                func.content.push(EinsteinAlternative::TensorAccess {
+                sequence.content.pop();
+                sequence.content.push(EinsteinAlternative::TensorAccess {
                     tensor_name,
-                    span: group.span(),
+                    span,
                     indexes,
                 });
             } else {
@@ -82,36 +84,44 @@ fn parse_group(
                 return Err(invalid_stream);
             }
         }
-        _ => {
-            let mut inner_func = EinsteinFunction::new(group.span(), Vec::new());
-            parse_tensor_func(&mut group.stream().into_iter(), &mut inner_func, index_use)?;
-            let group = EinsteinAlternative::ParensGroup(group.span(), inner_func.content);
-            func.content.push(group);
+        delimiter => {
+            let mut new_sequence = if delimiter == Delimiter::Parenthesis {
+                EinsteinSequence::with_parens(group.span())
+            } else {
+                EinsteinSequence::naked(group.span())
+            };
+            parse_sequence(
+                &mut group.stream().into_iter(),
+                &mut new_sequence,
+                index_use,
+            )?;
+            sequence
+                .content
+                .push(EinsteinAlternative::Seq(new_sequence));
         }
     }
     Ok(())
 }
 
-fn parse_tensor_func(
+fn parse_sequence(
     tokens: &mut impl Iterator<Item = TokenTree>,
-    func: &mut EinsteinFunction,
+    sequence: &mut EinsteinSequence,
     index_use: &mut IndexUse,
 ) -> Result<(), TokenStream> {
     while let Some(token) = tokens.next() {
         match token {
-            TokenTree::Punct(ref punct) => parse_punct(punct, tokens, func, index_use)?,
-            TokenTree::Group(ref group) => parse_group(group, func, index_use)?,
-            TokenTree::Ident(ref ident) => func.push_token(TokenTree::Ident(ident.clone())),
-            TokenTree::Literal(_) => func.push_token(token),
+            TokenTree::Punct(punct) => parse_punct(punct, tokens, sequence, index_use)?,
+            TokenTree::Group(group) => parse_group(group, sequence, index_use)?,
+            _ => sequence.push_token(token),
         }
     }
     Ok(())
 }
 
-pub fn parse(input: proc_macro::TokenStream) -> Result<(EinsteinFunction, IndexUse), TokenStream> {
+pub fn parse(input: proc_macro::TokenStream) -> Result<(EinsteinSequence, IndexUse), TokenStream> {
     let input: TokenStream = input.into();
-    let mut func = EinsteinFunction::new(Span::call_site(), Vec::new());
+    let mut sequence = EinsteinSequence::initial();
     let mut index_use = IndexUse::new();
-    parse_tensor_func(&mut input.into_iter(), &mut func, &mut index_use)?;
-    Ok((func, index_use))
+    parse_sequence(&mut input.into_iter(), &mut sequence, &mut index_use)?;
+    Ok((sequence, index_use))
 }

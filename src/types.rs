@@ -2,39 +2,16 @@ use proc_macro2::{Ident, Span, TokenTree};
 use std::collections::HashMap;
 
 pub struct EinsteinFunction {
-    pub span: Span,
     pub inverted_indexes: Vec<Ident>,
-    pub content: Vec<EinsteinAlternative>,
+    pub sequence: EinsteinSequence,
 }
 
 impl EinsteinFunction {
-    pub fn new(span: Span, inverted_indexes: Vec<Ident>) -> Self {
+    pub fn new(inverted_indexes: Vec<Ident>, sequence: EinsteinSequence) -> Self {
         EinsteinFunction {
-            span,
+            sequence,
             inverted_indexes,
-            content: Vec::new(),
         }
-    }
-
-    pub fn from_group(span: Span, content: Vec<EinsteinAlternative>) -> Self {
-        EinsteinFunction {
-            span,
-            inverted_indexes: Vec::new(),
-            content,
-        }
-    }
-
-    pub fn push_token(&mut self, token: TokenTree) {
-        self.content.push(EinsteinAlternative::Tree(token));
-    }
-
-    pub fn retrieve_all_indexes(&mut self) -> Vec<Ident> {
-        let mut inverted_indexes = Vec::<Ident>::new();
-        while let Some(EinsteinAlternative::Tree(TokenTree::Ident(index))) = self.content.last() {
-            inverted_indexes.push(index.clone());
-            self.content.pop();
-        }
-        inverted_indexes
     }
 }
 
@@ -47,12 +24,57 @@ pub struct EinsteinPosition {
 pub enum EinsteinAlternative {
     Func(EinsteinFunction),
     Tree(TokenTree),
-    ParensGroup(Span, Vec<EinsteinAlternative>),
+    Seq(EinsteinSequence),
     TensorAccess {
         tensor_name: Ident,
         span: Span,
         indexes: Vec<Ident>,
     },
+}
+
+pub struct EinsteinSequence {
+    pub span: Span,
+    pub use_parens: bool,
+    pub content: Vec<EinsteinAlternative>,
+}
+
+impl EinsteinSequence {
+    pub fn initial() -> Self {
+        Self {
+            span: Span::call_site(),
+            use_parens: false,
+            content: Vec::new(),
+        }
+    }
+
+    pub fn with_parens(span: Span) -> Self {
+        Self {
+            span,
+            use_parens: true,
+            content: Vec::new(),
+        }
+    }
+
+    pub fn naked(span: Span) -> Self {
+        Self {
+            span,
+            use_parens: false,
+            content: Vec::new(),
+        }
+    }
+
+    pub fn push_token(&mut self, token: TokenTree) {
+        self.content.push(EinsteinAlternative::Tree(token));
+    }
+
+    pub fn extract_previous_identifiers(&mut self) -> Vec<Ident> {
+        let mut inverted_identifiers = Vec::<Ident>::new();
+        while let Some(EinsteinAlternative::Tree(TokenTree::Ident(ident))) = self.content.last() {
+            inverted_identifiers.push(ident.clone());
+            self.content.pop();
+        }
+        inverted_identifiers
+    }
 }
 
 pub struct IndexUse {
@@ -87,6 +109,7 @@ impl IndexUse {
             }
         }
     }
+
     pub fn into_iter(self) -> impl IntoIterator<Item = (Ident, Vec<EinsteinPosition>)> {
         let mut correspondence = self.correspondence;
         self.indexes_in_order.into_iter().map(move |index_name| {

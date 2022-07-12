@@ -28,7 +28,7 @@ fn simplify(text: &String) -> String {
 pub fn make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match parse(input) {
         Err(invalid_stream) => invalid_stream.into(),
-        Ok((func, index_use)) => sequentialize(func, index_use).into(),
+        Ok((sequence, index_use)) => sequentialize(sequence, index_use).into(),
     }
 }
 
@@ -36,8 +36,8 @@ pub fn make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn format_for_make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match parse(input) {
         Err(invalid_stream) => invalid_stream.into(),
-        Ok((func, index_use)) => {
-            let output = sequentialize(func, index_use);
+        Ok((sequence, index_use)) => {
+            let output = sequentialize(sequence, index_use);
             let string = simplify(&output.to_string());
             let mut output = TokenStream::new();
             output.extend_one(TokenTree::Literal(Literal::string(string.as_str())));

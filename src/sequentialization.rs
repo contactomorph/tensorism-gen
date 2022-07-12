@@ -1,54 +1,60 @@
 use crate::types::*;
-use proc_macro2::{Delimiter, Group, Ident, Literal, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
-fn sequentialize_parens_group(span: Span, group: Vec<EinsteinAlternative>) -> TokenTree {
-    let inner_func = EinsteinFunction::from_group(span, group);
-    let mut inner_stream = TokenStream::new();
-    sequentialize_tensor_func(inner_func, &mut inner_stream);
-    TokenTree::Group(Group::new(Delimiter::Parenthesis, inner_stream))
+fn sequentialize_tensor_func(func: EinsteinFunction, stream: &mut TokenStream) {
+    let mut direct_indexes = func.inverted_indexes.clone();
+    direct_indexes.reverse();
+    let indexes_tuple = quote! {(#(#direct_indexes),*, )};
+    let mut mappings = indexes_tuple.clone();
+    for (i, index) in func.inverted_indexes.into_iter().enumerate() {
+        let length_name = format_ident!("{}_length", index);
+        let span = index.span();
+        mappings = if i == 0 {
+            quote_spanned! {span => (0usize..#length_name).map(move |#index| #mappings)}
+        } else {
+            quote_spanned! {span => (0usize..#length_name).flat_map(move |#index| #mappings)}
+        }
+    }
+    let span = func.sequence.span;
+    let mut content_stream = TokenStream::new();
+    sequentialize_sequence(func.sequence, &mut content_stream);
+    let func_stream = quote_spanned! {
+        span =>  #mappings.map(|#indexes_tuple| { #content_stream })
+    };
+    stream.extend(func_stream);
 }
 
-fn sequentialize_tensor_func(mut func: EinsteinFunction, stream: &mut TokenStream) {
+fn sequentialize_sequence(sequence: EinsteinSequence, stream: &mut TokenStream) {
     let mut content = TokenStream::new();
-    for alt in func.content.into_iter() {
+    for alt in sequence.content.into_iter() {
         match alt {
             EinsteinAlternative::Func(sub_func) => {
                 sequentialize_tensor_func(sub_func, &mut content);
             }
             EinsteinAlternative::Tree(token) => content.extend_one(token),
-            EinsteinAlternative::ParensGroup(span, group) => {
-                content.extend_one(sequentialize_parens_group(span, group));
+            EinsteinAlternative::Seq(sub_sequence) => {
+                sequentialize_sequence(sub_sequence, &mut content);
             }
             EinsteinAlternative::TensorAccess {
                 tensor_name,
                 span,
                 indexes,
             } => {
-                let stream = quote_spanned! {span => (* unsafe{ #tensor_name.get_unchecked(#(#indexes), *) })};
+                let stream = quote_spanned! {
+                    span => (* unsafe{ #tensor_name.get_unchecked(#(#indexes), *) })
+                };
                 content.extend(stream);
             }
         }
     }
-    let index_count = func.inverted_indexes.len();
-    let func_stream = if index_count > 0 {
-        let mut direct_indexes = func.inverted_indexes.clone();
-        direct_indexes.reverse();
-        let indexes_tuple = quote! {(#(#direct_indexes),*, )};
-        let mut mappings = indexes_tuple.clone();
-        for (i, index) in func.inverted_indexes.into_iter().enumerate() {
-            let length_name = format_ident!("{}_length", index);
-            let span = index.span();
-            mappings = if i == 0 {
-                quote_spanned! {span => (0usize..#length_name).map(move |#index| #mappings)}
-            } else {
-                quote_spanned! {span => (0usize..#length_name).flat_map(move |#index| #mappings)}
-            }
-        }
-        quote_spanned! {func.span =>  #mappings.map(|#indexes_tuple| { #content }) }
+    if sequence.use_parens {
+        stream.extend_one(TokenTree::Group(Group::new(
+            Delimiter::Parenthesis,
+            content,
+        )));
     } else {
-        content
-    };
-    stream.extend_one(TokenTree::Group(Group::new(Delimiter::None, func_stream)));
+        stream.extend(content)
+    }
 }
 
 fn sequentialize_header(index_use: IndexUse) -> TokenStream {
@@ -79,27 +85,27 @@ fn sequentialize_header(index_use: IndexUse) -> TokenStream {
     output
 }
 
-fn try_extract_left_indexes(mut func: EinsteinFunction) -> (Option<Vec<Ident>>, EinsteinFunction) {
-    if let [EinsteinAlternative::Func(_)] = func.content.as_slice() {
-        if let Some(EinsteinAlternative::Func(mut sub_func)) = func.content.pop() {
-            if sub_func.inverted_indexes.is_empty() {
-                (None, sub_func)
+fn try_extract_func(mut sequence: EinsteinSequence) -> Result<EinsteinFunction, EinsteinSequence> {
+    if let [EinsteinAlternative::Func(_)] = sequence.content.as_slice() {
+        if let Some(EinsteinAlternative::Func(func)) = sequence.content.pop() {
+            if func.inverted_indexes.is_empty() {
+                Err(func.sequence)
             } else {
-                let mut direct_indexes = sub_func.inverted_indexes.drain(..).collect::<Vec<_>>();
-                direct_indexes.reverse();
-                (Some(direct_indexes), sub_func)
+                Ok(func)
             }
         } else {
             panic!("Unreachable")
         }
     } else {
-        (None, func)
+        Err(sequence)
     }
 }
 
-fn sequentialize_body(func: EinsteinFunction, stream: &mut TokenStream) {
-    match try_extract_left_indexes(func) {
-        (Some(direct_indexes), sub_func) => {
+fn sequentialize_body(sequence: EinsteinSequence, stream: &mut TokenStream) {
+    match try_extract_func(sequence) {
+        Ok(mut func) => {
+            let mut direct_indexes = func.inverted_indexes.drain(..).collect::<Vec<_>>();
+            direct_indexes.reverse();
             let index = direct_indexes.first().unwrap().clone();
             let mut shape_creation = quote_spanned! {
                 index.span() => ShapeBuilder::with(::tensorism::tensors::Tensor::dims(& a).0)
@@ -110,18 +116,18 @@ fn sequentialize_body(func: EinsteinFunction, stream: &mut TokenStream) {
                 }
             }
             let mut substream = TokenStream::new();
-            sequentialize_tensor_func(sub_func, &mut substream);
+            sequentialize_sequence(func.sequence, &mut substream);
             stream.extend(quote_spanned! {
                 Span::call_site() => #shape_creation.define(|(#(#direct_indexes),*, )| { #substream })
             });
         }
-        (None, func) => sequentialize_tensor_func(func, stream),
+        Err(sequence) => sequentialize_sequence(sequence, stream),
     }
 }
 
-pub fn sequentialize(func: EinsteinFunction, index_use: IndexUse) -> TokenStream {
+pub fn sequentialize(sequence: EinsteinSequence, index_use: IndexUse) -> TokenStream {
     let mut stream = sequentialize_header(index_use);
-    sequentialize_body(func, &mut stream);
+    sequentialize_body(sequence, &mut stream);
     let mut output = TokenStream::new();
     output.extend_one(TokenTree::Group(Group::new(Delimiter::Brace, stream)));
     output.into()
