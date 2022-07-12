@@ -41,6 +41,7 @@ impl EinsteinFunction {
 pub struct EinsteinPosition {
     pub tensor_name: Ident,
     pub position: usize,
+    pub index_name: Ident,
 }
 
 pub enum EinsteinAlternative {
@@ -68,11 +69,12 @@ impl IndexUse {
     }
 
     pub fn push(&mut self, index_name: Ident, tensor_name: Ident, position: usize) {
+        let index_as_string = index_name.to_string();
         let position = EinsteinPosition {
             tensor_name,
             position,
+            index_name: index_name.clone(),
         };
-        let index_as_string = index_name.to_string();
         match self.correspondence.get_mut(&index_as_string) {
             Some(positions) => {
                 positions.push(position);

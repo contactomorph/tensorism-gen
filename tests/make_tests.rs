@@ -20,10 +20,11 @@ fn format_make_macro() {
         "{ \
             let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
             let j_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).1.into() ; \
-            (0usize .. i_length).map(move | i | (i,)).map(| (i,) | { (\
-                (0usize .. j_length).map(move | j | (j,))\
-                .map(| (j,) | { (* unsafe { a.get_unchecked(i, j) }) + (* unsafe { b.get_unchecked(j) }) })\
-            ) }) \
+            :: tensorism :: dimensions :: identical(:: tensorism :: tensors :: Tensor :: dims(& a).1, :: tensorism :: tensors :: Tensor :: dims(& b).0) ; \
+            ShapeBuilder :: with(:: tensorism :: tensors :: Tensor :: dims(& a).0).define(| (i,) | { \
+                ((0usize .. j_length).map(move | j | (j,))\
+                .map(| (j,) | { (* unsafe { a.get_unchecked(i, j) }) + (* unsafe { b.get_unchecked(j) }) })) \
+            }) \
         } ",
         string);
 }
@@ -50,10 +51,8 @@ fn run_make_macro() {
         .generate();
     let all_chars_count = make! {count_all_chars(i $ &c[i])};
     assert_eq!(21, all_chars_count);
-    // let b = ShapeBuilder::with_static::<10>()
-    //     .prepare()
-    //     .fill(&12f64);
-    // let iterator = make! {i $ (j $ a[i, j] + b[j])};
+    let b = ShapeBuilder::with_static::<10>().prepare().fill(&12f64);
+    let t = make! {i j $ a[i, j] as f64 + b[j]};
 }
 
 //let v = tensorism_gen::decl!(i # a[i, 4] + b[i]);
