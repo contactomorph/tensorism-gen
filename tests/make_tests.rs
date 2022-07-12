@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
 use tensorism::{building::TensorBuilder, shapes::ShapeBuilder};
-use tensorism_gen::{tensorism_make, tensorism_string_for_make};
+use tensorism_gen::{make, format_for_make};
 
 #[test]
 fn format_make_macro() {
-    let string = tensorism_string_for_make! {(i j $ a[i, j] + i as f64).sum()};
+    let string = format_for_make! {(i j $ a[i, j] + i as f64).sum()};
     assert_eq!(
         "{ \
             let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
@@ -15,7 +15,7 @@ fn format_make_macro() {
         } ",
         string
     );
-    let string = tensorism_string_for_make! {i $ (j $ a[i, j] + b[j])};
+    let string = format_for_make! {i $ (j $ a[i, j] + b[j])};
     assert_eq!(
         "{ \
             let i_length : usize = :: tensorism :: tensors :: Tensor :: dims(& a).0.into() ; \
@@ -37,10 +37,10 @@ fn run_make_macro() {
     let a = ShapeBuilder::with_static::<10>()
         .with_first()
         .define(|(i, j)| i as i64 * (j + 1) as i64);
-    let sum: i64 = tensorism_make! {(i j $ a[i, j] + i as i64).sum()};
+    let sum: i64 = make! {(i j $ a[i, j] + i as i64).sum()};
     assert_eq!(2925i64, sum);
 
-    let result: i64 = tensorism_make! {Iterator::sum(i $ Iterator::min(j $ a[i, j]).unwrap())};
+    let result: i64 = make! {Iterator::sum(i $ Iterator::min(j $ a[i, j]).unwrap())};
     assert_eq!(45i64, result);
 
     let messages = ["Hello", "World", "How", "are you?"].map(|s| String::from_str(s).unwrap());
@@ -48,12 +48,12 @@ fn run_make_macro() {
         .prepare()
         .append_array(messages)
         .generate();
-    let all_chars_count = tensorism_make! {count_all_chars(i $ &c[i])};
+    let all_chars_count = make! {count_all_chars(i $ &c[i])};
     assert_eq!(21, all_chars_count);
     // let b = ShapeBuilder::with_static::<10>()
     //     .prepare()
     //     .fill(&12f64);
-    // let iterator = tensorism_make! {i $ (j $ a[i, j] + b[j])};
+    // let iterator = make! {i $ (j $ a[i, j] + b[j])};
 }
 
 //let v = tensorism_gen::decl!(i # a[i, 4] + b[i]);

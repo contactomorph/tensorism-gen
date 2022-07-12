@@ -25,7 +25,7 @@ fn simplify(text: &String) -> String {
 }
 
 #[proc_macro]
-pub fn tensorism_make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match parse(input) {
         Err(invalid_stream) => invalid_stream.into(),
         Ok((func, index_use)) => sequentialize(func, index_use).into(),
@@ -33,7 +33,7 @@ pub fn tensorism_make(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 }
 
 #[proc_macro]
-pub fn tensorism_string_for_make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn format_for_make(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match parse(input) {
         Err(invalid_stream) => invalid_stream.into(),
         Ok((func, index_use)) => {
