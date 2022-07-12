@@ -78,7 +78,7 @@ impl EinsteinSequence {
 }
 
 pub struct IndexUse {
-    indexes_in_order: Vec<Ident>,
+    indexes_in_order: Vec<String>,
     correspondence: HashMap<String, Vec<EinsteinPosition>>,
 }
 
@@ -90,7 +90,17 @@ impl IndexUse {
         }
     }
 
-    pub fn push(&mut self, index_name: Ident, tensor_name: Ident, position: usize) {
+    pub fn declare_new(&mut self, index_name: Ident) -> bool {
+        let index_as_string = index_name.to_string();
+        if self.indexes_in_order.contains(&index_as_string) {
+            false
+        } else {
+            self.indexes_in_order.push(index_as_string);
+            true
+        }
+    }
+
+    pub fn push(&mut self, index_name: Ident, tensor_name: Ident, position: usize) -> bool {
         let index_as_string = index_name.to_string();
         let position = EinsteinPosition {
             tensor_name,
@@ -100,17 +110,22 @@ impl IndexUse {
         match self.correspondence.get_mut(&index_as_string) {
             Some(positions) => {
                 positions.push(position);
+                true
             }
             None => {
-                let mut positions = Vec::new();
-                positions.push(position);
-                self.correspondence.insert(index_as_string, positions);
-                self.indexes_in_order.push(index_name);
+                if self.indexes_in_order.contains(&&index_as_string) {
+                    let mut positions = Vec::new();
+                    positions.push(position);
+                    self.correspondence.insert(index_as_string, positions);
+                    true
+                } else {
+                    false
+                }
             }
         }
     }
 
-    pub fn into_iter(self) -> impl IntoIterator<Item = (Ident, Vec<EinsteinPosition>)> {
+    pub fn into_iter(self) -> impl IntoIterator<Item = (String, Vec<EinsteinPosition>)> {
         let mut correspondence = self.correspondence;
         self.indexes_in_order.into_iter().map(move |index_name| {
             let positions = correspondence.remove(&index_name.to_string()).unwrap();

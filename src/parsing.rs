@@ -1,5 +1,12 @@
 use crate::types::*;
-use proc_macro2::{Delimiter, Group, Ident, Punct, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Group, Ident, Punct, Span, TokenStream, TokenTree};
+
+fn generate_compilation_error(span: Span, message: &'static str) -> Result<(), TokenStream> {
+    let invalid_stream = quote_spanned! {
+        span => compile_error!(#message)
+    };
+    Err(invalid_stream)
+}
 
 fn parse_punct(
     punct: Punct,
@@ -9,12 +16,17 @@ fn parse_punct(
 ) -> Result<(), TokenStream> {
     let c = punct.as_char();
     if c == ';' {
-        let invalid_stream = quote_spanned! {
-            punct.span() => compile_error!("Character ';' is forbidden")
-        };
-        return Err(invalid_stream);
+        generate_compilation_error(punct.span(), "Character ';' is forbidden")?
     } else if c == '$' {
         let inverted_indexes = sequence.extract_previous_identifiers();
+        let mut direct_indexes = inverted_indexes.clone();
+        direct_indexes.reverse();
+        for index_name in direct_indexes {
+            let added = index_use.declare_new(index_name.clone());
+            if !added {
+                generate_compilation_error(index_name.span(), "Illegal reused index name")?
+            }
+        }
         let mut new_sequence = EinsteinSequence::naked(punct.span());
         parse_sequence(tokens, &mut new_sequence, index_use)?;
         let func = EinsteinFunction::new(inverted_indexes, new_sequence);
@@ -32,18 +44,10 @@ fn parse_tensor_indexing(group: Group) -> Result<Vec<Ident>, TokenStream> {
             TokenTree::Ident(index) => indexes.push(index),
             TokenTree::Punct(p) => {
                 if p.as_char() != ',' {
-                    let invalid_stream = quote_spanned! {
-                        group.span() => compile_error!("Invalid content in indexes")
-                    };
-                    return Err(invalid_stream);
+                    generate_compilation_error(group.span(), "Invalid content in indexes")?
                 }
             }
-            _ => {
-                let invalid_stream = quote_spanned! {
-                    group.span() => compile_error!("Invalid content in indexes")
-                };
-                return Err(invalid_stream);
-            }
+            _ => generate_compilation_error(group.span(), "Invalid content in indexes")?,
         }
     }
     Ok(indexes)
@@ -56,10 +60,7 @@ fn parse_group(
 ) -> Result<(), TokenStream> {
     match group.delimiter() {
         Delimiter::Brace => {
-            let invalid_stream = quote_spanned! {
-                group.span() => compile_error!("Characters '{' and '}' are forbidden")
-            };
-            return Err(invalid_stream);
+            generate_compilation_error(group.span(), "Characters '{' and '}' are forbidden")?
         }
         Delimiter::Bracket => {
             if let Some(EinsteinAlternative::Tree(TokenTree::Ident(tensor_name))) =
@@ -69,7 +70,10 @@ fn parse_group(
                 let span = group.span();
                 let indexes = parse_tensor_indexing(group)?;
                 for (position, index_name) in indexes.iter().enumerate() {
-                    index_use.push(index_name.clone(), tensor_name.clone(), position)
+                    let added = index_use.push(index_name.clone(), tensor_name.clone(), position);
+                    if !added {
+                        generate_compilation_error(index_name.span(), "Undeclared index")?
+                    }
                 }
                 sequence.content.pop();
                 sequence.content.push(EinsteinAlternative::TensorAccess {
@@ -78,10 +82,10 @@ fn parse_group(
                     indexes,
                 });
             } else {
-                let invalid_stream = quote_spanned! {
-                    group.span() => compile_error!("Invalid tensor name: an identifier was expected")
-                };
-                return Err(invalid_stream);
+                generate_compilation_error(
+                    group.span(),
+                    "Invalid tensor name: an identifier was expected",
+                )?
             }
         }
         delimiter => {
