@@ -7,12 +7,12 @@ fn sequentialize_tensor_func(func: EinsteinFunction, stream: &mut TokenStream) {
     let indexes_tuple = quote! {(#(#direct_indexes),*, )};
     let mut mappings = indexes_tuple.clone();
     for (i, index) in func.inverted_indexes.into_iter().enumerate() {
-        let length_name = format_ident!("{}_length", index);
+        let dimension_name = format_ident!("{}_dimension", index);
         let span = index.span();
         mappings = if i == 0 {
-            quote_spanned! {span => (0usize..#length_name).map(move |#index| #mappings)}
+            quote_spanned! {span => (0usize..#dimension_name.into()).map(move |#index| #mappings)}
         } else {
-            quote_spanned! {span => (0usize..#length_name).flat_map(move |#index| #mappings)}
+            quote_spanned! {span => (0usize..#dimension_name.into()).flat_map(move |#index| #mappings)}
         }
     }
     let span = func.sequence.span;
@@ -60,13 +60,13 @@ fn sequentialize_sequence(sequence: EinsteinSequence, stream: &mut TokenStream) 
 fn sequentialize_header(index_use: IndexUse) -> TokenStream {
     let mut output = TokenStream::new();
     for (name, positions) in index_use.into_iter() {
-        let length_name = format_ident!("{}_length", name);
+        let dimension_name = format_ident!("{}_dimension", name);
         let einstein_position = positions.first().unwrap();
         let pos = Literal::usize_unsuffixed(einstein_position.position);
         let tensor_name = einstein_position.tensor_name.clone();
         let length_definition = quote_spanned! {
             tensor_name.span() =>
-            let #length_name: usize = ::tensorism::tensors::Tensor::dims(&#tensor_name).#pos.into();
+            let #dimension_name: ::tensorism::dimensions::Dim::<_> = ::tensorism::tensors::Tensor::dims(&#tensor_name).#pos;
         };
         output.extend(length_definition);
         for einstein_position in positions.into_iter().skip(1) {
@@ -101,26 +101,30 @@ fn try_extract_func(mut sequence: EinsteinSequence) -> Result<EinsteinFunction, 
     }
 }
 
+fn sequentialize_shape_creation(mut func: EinsteinFunction) -> TokenStream {
+    let mut direct_indexes = func.inverted_indexes.drain(..).collect::<Vec<_>>();
+    direct_indexes.reverse();
+    let index = direct_indexes.first().unwrap().clone();
+    let dimension_name = format_ident!("{}_dimension", index);
+    let mut shape_creation = quote_spanned! {
+        index.span() => ::tensorism::shapes::ShapeBuilder::with(#dimension_name)
+    };
+    for index in direct_indexes.iter().skip(1) {
+        let dimension_name = format_ident!("{}_dimension", index);
+        shape_creation = quote_spanned! {
+            index.span() => #shape_creation.with(#dimension_name)
+        }
+    }
+    let mut substream = TokenStream::new();
+    sequentialize_sequence(func.sequence, &mut substream);
+    quote_spanned! {
+        Span::call_site() => #shape_creation.define(|(#(#direct_indexes),*, )| { #substream })
+    }
+}
+
 fn sequentialize_body(sequence: EinsteinSequence, stream: &mut TokenStream) {
     match try_extract_func(sequence) {
-        Ok(mut func) => {
-            let mut direct_indexes = func.inverted_indexes.drain(..).collect::<Vec<_>>();
-            direct_indexes.reverse();
-            let index = direct_indexes.first().unwrap().clone();
-            let mut shape_creation = quote_spanned! {
-                index.span() => ShapeBuilder::with(::tensorism::tensors::Tensor::dims(& a).0)
-            };
-            for index in direct_indexes.iter().skip(1) {
-                shape_creation = quote_spanned! {
-                    index.span() => #shape_creation.with(::tensorism::tensors::Tensor::dims(& a).1)
-                }
-            }
-            let mut substream = TokenStream::new();
-            sequentialize_sequence(func.sequence, &mut substream);
-            stream.extend(quote_spanned! {
-                Span::call_site() => #shape_creation.define(|(#(#direct_indexes),*, )| { #substream })
-            });
-        }
+        Ok(func) => stream.extend(sequentialize_shape_creation(func)),
         Err(sequence) => sequentialize_sequence(sequence, stream),
     }
 }
