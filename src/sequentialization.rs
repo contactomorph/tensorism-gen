@@ -107,7 +107,7 @@ fn sequentialize_shape_creation(mut func: EinsteinFunction) -> TokenStream {
     let index = direct_indexes.first().unwrap().clone();
     let dimension_name = format_ident!("{}_dimension", index);
     let mut shape_creation = quote_spanned! {
-        index.span() => ::tensorism::shapes::ShapeBuilder::with(#dimension_name)
+        index.span() => ::tensorism::building::TensorBuilding::with(#dimension_name)
     };
     for index in direct_indexes.iter().skip(1) {
         let dimension_name = format_ident!("{}_dimension", index);
