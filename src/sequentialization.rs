@@ -66,7 +66,7 @@ fn sequentialize_header(index_use: IndexUse) -> TokenStream {
         let tensor_name = einstein_position.tensor_name.clone();
         let length_definition = quote_spanned! {
             tensor_name.span() =>
-            let #dimension_name: ::tensorism::dimensions::Dim::<_> = ::tensorism::tensors::Tensor::dims(&#tensor_name).#pos;
+            let #dimension_name: ::tensorism::dimensions::Dim::<_> = ::tensorism::tensors::Tensor::shape(&#tensor_name).#pos;
         };
         output.extend(length_definition);
         for einstein_position in positions.into_iter().skip(1) {
@@ -75,8 +75,8 @@ fn sequentialize_header(index_use: IndexUse) -> TokenStream {
             let equality_assertion = quote_spanned! {
                 einstein_position.index_name.span() =>
                 :: tensorism::dimensions::identical(
-                    ::tensorism::tensors::Tensor::dims(&#tensor_name).#pos,
-                    ::tensorism::tensors::Tensor::dims(&#other_tensor_name).#other_pos
+                    ::tensorism::tensors::Tensor::shape(&#tensor_name).#pos,
+                    ::tensorism::tensors::Tensor::shape(&#other_tensor_name).#other_pos
                 );
             };
             output.extend(equality_assertion);

@@ -12,8 +12,8 @@ fn format_make_macro() {
     let string = format_for_make! {(i j $ a[i, j] + i as f64).sum()};
     assert_eq!(
         "{ \
-            let i_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: dims(& a).0 ; \
-            let j_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: dims(& a).1 ; \
+            let i_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: shape(& a).0 ; \
+            let j_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: shape(& a).1 ; \
             ((0usize .. i_dimension.into()).flat_map(move | i | (0usize .. j_dimension.into()).map(move | j | (i, j,)))\
             .map(| (i, j,) | { (* unsafe { a.get_unchecked(i, j) }) + i as f64 })).sum() \
         } ",
@@ -22,9 +22,9 @@ fn format_make_macro() {
     let string = format_for_make! {i $ (j $ a[i, j] + b[j])};
     assert_eq!(
         "{ \
-            let i_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: dims(& a).0 ; \
-            let j_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: dims(& a).1 ; \
-            :: tensorism :: dimensions :: identical(:: tensorism :: tensors :: Tensor :: dims(& a).1, :: tensorism :: tensors :: Tensor :: dims(& b).0) ; \
+            let i_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: shape(& a).0 ; \
+            let j_dimension : :: tensorism :: dimensions :: Dim :: < _ > = :: tensorism :: tensors :: Tensor :: shape(& a).1 ; \
+            :: tensorism :: dimensions :: identical(:: tensorism :: tensors :: Tensor :: shape(& a).1, :: tensorism :: tensors :: Tensor :: shape(& b).0) ; \
             :: tensorism :: building :: TensorBuilding :: with(i_dimension).define(| (i,) | { \
                 ((0usize .. j_dimension.into()).map(move | j | (j,))\
                 .map(| (j,) | { (* unsafe { a.get_unchecked(i, j) }) + (* unsafe { b.get_unchecked(j) }) })) \
@@ -58,5 +58,5 @@ fn run_make_macro() {
     let b = TensorBuilding::with_static::<10>().prepare().fill(&12f64);
     let t = make! {i j $ a[i, j] as f64 + b[j]};
 
-    assert_eq!((new_static_dim::<9>(), new_static_dim::<10>()), t.dims());
+    assert_eq!((new_static_dim::<9>(), new_static_dim::<10>()), t.shape());
 }
