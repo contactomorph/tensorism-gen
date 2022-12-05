@@ -11,7 +11,7 @@ fn generate_compilation_error(span: Span, message: &'static str) -> Result<(), T
 fn parse_punct(
     punct: Punct,
     tokens: &mut impl Iterator<Item = TokenTree>,
-    sequence: &mut EinsteinSequence,
+    sequence: &mut RicciSequence,
     index_use: &mut IndexUse,
 ) -> Result<(), TokenStream> {
     let c = punct.as_char();
@@ -27,10 +27,10 @@ fn parse_punct(
                 generate_compilation_error(index_name.span(), "Illegal reused index name")?
             }
         }
-        let mut new_sequence = EinsteinSequence::naked(punct.span());
+        let mut new_sequence = RicciSequence::naked(punct.span());
         parse_sequence(tokens, &mut new_sequence, index_use)?;
-        let func = EinsteinFunction::new(inverted_indexes, new_sequence);
-        sequence.content.push(EinsteinAlternative::Func(func));
+        let func = RicciFunction::new(inverted_indexes, new_sequence);
+        sequence.content.push(RicciAlternative::Func(func));
     } else {
         sequence.push_token(TokenTree::Punct(punct.clone()));
     }
@@ -55,7 +55,7 @@ fn parse_tensor_indexing(group: Group) -> Result<Vec<Ident>, TokenStream> {
 
 fn parse_group(
     group: Group,
-    sequence: &mut EinsteinSequence,
+    sequence: &mut RicciSequence,
     index_use: &mut IndexUse,
 ) -> Result<(), TokenStream> {
     match group.delimiter() {
@@ -63,7 +63,7 @@ fn parse_group(
             generate_compilation_error(group.span(), "Characters '{' and '}' are forbidden")?
         }
         Delimiter::Bracket => {
-            if let Some(EinsteinAlternative::Tree(TokenTree::Ident(tensor_name))) =
+            if let Some(RicciAlternative::Tree(TokenTree::Ident(tensor_name))) =
                 sequence.content.last()
             {
                 let tensor_name = tensor_name.clone();
@@ -76,7 +76,7 @@ fn parse_group(
                     }
                 }
                 sequence.content.pop();
-                sequence.content.push(EinsteinAlternative::TensorAccess {
+                sequence.content.push(RicciAlternative::TensorAccess {
                     tensor_name,
                     span,
                     indexes,
@@ -90,18 +90,16 @@ fn parse_group(
         }
         delimiter => {
             let mut new_sequence = if delimiter == Delimiter::Parenthesis {
-                EinsteinSequence::with_parens(group.span())
+                RicciSequence::with_parens(group.span())
             } else {
-                EinsteinSequence::naked(group.span())
+                RicciSequence::naked(group.span())
             };
             parse_sequence(
                 &mut group.stream().into_iter(),
                 &mut new_sequence,
                 index_use,
             )?;
-            sequence
-                .content
-                .push(EinsteinAlternative::Seq(new_sequence));
+            sequence.content.push(RicciAlternative::Seq(new_sequence));
         }
     }
     Ok(())
@@ -109,7 +107,7 @@ fn parse_group(
 
 fn parse_sequence(
     tokens: &mut impl Iterator<Item = TokenTree>,
-    sequence: &mut EinsteinSequence,
+    sequence: &mut RicciSequence,
     index_use: &mut IndexUse,
 ) -> Result<(), TokenStream> {
     while let Some(token) = tokens.next() {
@@ -122,9 +120,9 @@ fn parse_sequence(
     Ok(())
 }
 
-pub fn parse(input: proc_macro::TokenStream) -> Result<(EinsteinSequence, IndexUse), TokenStream> {
+pub fn parse(input: proc_macro::TokenStream) -> Result<(RicciSequence, IndexUse), TokenStream> {
     let input: TokenStream = input.into();
-    let mut sequence = EinsteinSequence::initial();
+    let mut sequence = RicciSequence::initial();
     let mut index_use = IndexUse::new();
     parse_sequence(&mut input.into_iter(), &mut sequence, &mut index_use)?;
     Ok((sequence, index_use))

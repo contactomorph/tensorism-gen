@@ -1,7 +1,7 @@
 use crate::types::*;
 use proc_macro2::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
-fn sequentialize_tensor_func(func: EinsteinFunction, stream: &mut TokenStream) {
+fn sequentialize_tensor_func(func: RicciFunction, stream: &mut TokenStream) {
     let mut direct_indexes = func.inverted_indexes.clone();
     direct_indexes.reverse();
     let indexes_tuple = quote! {(#(#direct_indexes),*, )};
@@ -24,18 +24,18 @@ fn sequentialize_tensor_func(func: EinsteinFunction, stream: &mut TokenStream) {
     stream.extend(func_stream);
 }
 
-fn sequentialize_sequence(sequence: EinsteinSequence, stream: &mut TokenStream) {
+fn sequentialize_sequence(sequence: RicciSequence, stream: &mut TokenStream) {
     let mut content = TokenStream::new();
     for alt in sequence.content.into_iter() {
         match alt {
-            EinsteinAlternative::Func(sub_func) => {
+            RicciAlternative::Func(sub_func) => {
                 sequentialize_tensor_func(sub_func, &mut content);
             }
-            EinsteinAlternative::Tree(token) => content.extend_one(token),
-            EinsteinAlternative::Seq(sub_sequence) => {
+            RicciAlternative::Tree(token) => content.extend_one(token),
+            RicciAlternative::Seq(sub_sequence) => {
                 sequentialize_sequence(sub_sequence, &mut content);
             }
-            EinsteinAlternative::TensorAccess {
+            RicciAlternative::TensorAccess {
                 tensor_name,
                 span,
                 indexes,
@@ -85,9 +85,9 @@ fn sequentialize_header(index_use: IndexUse) -> TokenStream {
     output
 }
 
-fn try_extract_func(mut sequence: EinsteinSequence) -> Result<EinsteinFunction, EinsteinSequence> {
-    if let [EinsteinAlternative::Func(_)] = sequence.content.as_slice() {
-        if let Some(EinsteinAlternative::Func(func)) = sequence.content.pop() {
+fn try_extract_func(mut sequence: RicciSequence) -> Result<RicciFunction, RicciSequence> {
+    if let [RicciAlternative::Func(_)] = sequence.content.as_slice() {
+        if let Some(RicciAlternative::Func(func)) = sequence.content.pop() {
             if func.inverted_indexes.is_empty() {
                 Err(func.sequence)
             } else {
@@ -101,7 +101,7 @@ fn try_extract_func(mut sequence: EinsteinSequence) -> Result<EinsteinFunction, 
     }
 }
 
-fn sequentialize_shape_creation(mut func: EinsteinFunction) -> TokenStream {
+fn sequentialize_shape_creation(mut func: RicciFunction) -> TokenStream {
     let mut direct_indexes = func.inverted_indexes.drain(..).collect::<Vec<_>>();
     direct_indexes.reverse();
     let index = direct_indexes.first().unwrap().clone();
@@ -122,14 +122,14 @@ fn sequentialize_shape_creation(mut func: EinsteinFunction) -> TokenStream {
     }
 }
 
-fn sequentialize_body(sequence: EinsteinSequence, stream: &mut TokenStream) {
+fn sequentialize_body(sequence: RicciSequence, stream: &mut TokenStream) {
     match try_extract_func(sequence) {
         Ok(func) => stream.extend(sequentialize_shape_creation(func)),
         Err(sequence) => sequentialize_sequence(sequence, stream),
     }
 }
 
-pub fn sequentialize(sequence: EinsteinSequence, index_use: IndexUse) -> TokenStream {
+pub fn sequentialize(sequence: RicciSequence, index_use: IndexUse) -> TokenStream {
     let mut stream = sequentialize_header(index_use);
     sequentialize_body(sequence, &mut stream);
     let mut output = TokenStream::new();

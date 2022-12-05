@@ -1,30 +1,30 @@
 use proc_macro2::{Ident, Span, TokenTree};
 use std::collections::HashMap;
 
-pub struct EinsteinFunction {
+pub struct RicciFunction {
     pub inverted_indexes: Vec<Ident>,
-    pub sequence: EinsteinSequence,
+    pub sequence: RicciSequence,
 }
 
-impl EinsteinFunction {
-    pub fn new(inverted_indexes: Vec<Ident>, sequence: EinsteinSequence) -> Self {
-        EinsteinFunction {
+impl RicciFunction {
+    pub fn new(inverted_indexes: Vec<Ident>, sequence: RicciSequence) -> Self {
+        RicciFunction {
             sequence,
             inverted_indexes,
         }
     }
 }
 
-pub struct EinsteinPosition {
+pub struct RicciPosition {
     pub tensor_name: Ident,
     pub position: usize,
     pub index_name: Ident,
 }
 
-pub enum EinsteinAlternative {
-    Func(EinsteinFunction),
+pub enum RicciAlternative {
+    Func(RicciFunction),
     Tree(TokenTree),
-    Seq(EinsteinSequence),
+    Seq(RicciSequence),
     TensorAccess {
         tensor_name: Ident,
         span: Span,
@@ -32,13 +32,13 @@ pub enum EinsteinAlternative {
     },
 }
 
-pub struct EinsteinSequence {
+pub struct RicciSequence {
     pub span: Span,
     pub use_parens: bool,
-    pub content: Vec<EinsteinAlternative>,
+    pub content: Vec<RicciAlternative>,
 }
 
-impl EinsteinSequence {
+impl RicciSequence {
     pub fn initial() -> Self {
         Self {
             span: Span::call_site(),
@@ -64,12 +64,12 @@ impl EinsteinSequence {
     }
 
     pub fn push_token(&mut self, token: TokenTree) {
-        self.content.push(EinsteinAlternative::Tree(token));
+        self.content.push(RicciAlternative::Tree(token));
     }
 
     pub fn extract_previous_identifiers(&mut self) -> Vec<Ident> {
         let mut inverted_identifiers = Vec::<Ident>::new();
-        while let Some(EinsteinAlternative::Tree(TokenTree::Ident(ident))) = self.content.last() {
+        while let Some(RicciAlternative::Tree(TokenTree::Ident(ident))) = self.content.last() {
             inverted_identifiers.push(ident.clone());
             self.content.pop();
         }
@@ -79,7 +79,7 @@ impl EinsteinSequence {
 
 pub struct IndexUse {
     indexes_in_order: Vec<String>,
-    correspondence: HashMap<String, Vec<EinsteinPosition>>,
+    correspondence: HashMap<String, Vec<RicciPosition>>,
 }
 
 impl IndexUse {
@@ -102,7 +102,7 @@ impl IndexUse {
 
     pub fn push(&mut self, index_name: Ident, tensor_name: Ident, position: usize) -> bool {
         let index_as_string = index_name.to_string();
-        let position = EinsteinPosition {
+        let position = RicciPosition {
             tensor_name,
             position,
             index_name: index_name.clone(),
@@ -125,7 +125,7 @@ impl IndexUse {
         }
     }
 
-    pub fn into_iter(self) -> impl IntoIterator<Item = (String, Vec<EinsteinPosition>)> {
+    pub fn into_iter(self) -> impl IntoIterator<Item = (String, Vec<RicciPosition>)> {
         let mut correspondence = self.correspondence;
         self.indexes_in_order.into_iter().map(move |index_name| {
             let positions = correspondence.remove(&index_name.to_string()).unwrap();
