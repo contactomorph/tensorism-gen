@@ -57,6 +57,7 @@ mod assert;
 mod inspection;
 mod model;
 mod parsing;
+mod production;
 mod sequentialization;
 mod types;
 
@@ -102,9 +103,41 @@ pub fn format_new_ndarray(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 #[doc(hidden)]
 #[proc_macro]
 pub fn new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let group = syn::parse2::<crate::model::lambda::RicciGroup>(input.into()).unwrap();
-    let mapping = inspection::inspect(&group).unwrap();
-    let _ = mapping.get_equivalences();
-    let _ = mapping.get_plain_values();
-    todo!()
+    match syn::parse2::<crate::model::lambda::RicciGroup>(input.into()) {
+        Err(error) => {
+            let message = format!("Failed to parse input: {}", error);
+            quote! { compile_error!(#message) }.into()
+        }
+        Ok(group) => match inspection::inspect(&group) {
+            Err(error) => {
+                let message = format!("Index issues: {}", error);
+                quote! { compile_error!(#message) }.into()
+            }
+            Ok(mapping) => production::produce(group, mapping).into(),
+        },
+    }
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn format_new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match syn::parse2::<crate::model::lambda::RicciGroup>(input.into()) {
+        Err(error) => {
+            let message = format!("Failed to parse input: {}", error);
+            quote! { compile_error!(#message) }.into()
+        }
+        Ok(group) => match inspection::inspect(&group) {
+            Err(error) => {
+                let message = format!("Index issues: {}", error);
+                quote! { compile_error!(#message) }.into()
+            }
+            Ok(mapping) => {
+                let output = production::produce(group, mapping);
+                let string = simplify(&output.to_string());
+                let mut output = TokenStream::new();
+                TokenTree::Literal(Literal::string(string.as_str())).to_tokens(&mut output);
+                output.into()
+            }
+        },
+    }
 }

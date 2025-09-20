@@ -16,16 +16,18 @@ pub enum HeadKind {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct IndexingPosition {
-    name: Ident,
-    position: usize,
-    kind: HeadKind,
+    pub name: Ident,
+    pub position: usize,
+    pub rank: usize,
+    pub kind: HeadKind,
 }
 
 impl IndexingPosition {
-    pub fn new(name: &Ident, position: usize, kind: HeadKind) -> Self {
+    pub fn new(name: &Ident, position: usize, rank: usize, kind: HeadKind) -> Self {
         Self {
             name: name.clone(),
             position,
+            rank,
             kind,
         }
     }
@@ -33,6 +35,7 @@ impl IndexingPosition {
         Self {
             name: name.clone(),
             position: Self::RETURN_POSITION,
+            rank: Self::RETURN_POSITION,
             kind: HeadKind::Indexer,
         }
     }
@@ -46,20 +49,28 @@ impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
 }
 
 pub struct IndexingPositionEquivalence {
-    positions: Vec<IndexingPosition>,
+    pub index: Option<(Ident, String)>,
+    pub positions: Vec<IndexingPosition>,
 }
 
 impl IndexingPositionEquivalence {
-    pub fn new() -> Self {
+    pub fn new(index: Ident, postfix: String) -> Self {
         Self {
+            index: Some((index, postfix)),
             positions: Vec::new(),
+        }
+    }
+    pub fn from_positions(position_a: IndexingPosition, position_b: IndexingPosition) -> Self {
+        Self {
+            index: None,
+            positions: vec![position_a, position_b],
         }
     }
 }
 
 pub struct IndexingPositionMapping {
-    equivalences: Vec<IndexingPositionEquivalence>,
-    plain_values: HashMap<IndexingPosition, Expr>,
+    pub equivalences: Vec<IndexingPositionEquivalence>,
+    pub plain_values: HashMap<IndexingPosition, Expr>,
 }
 
 impl IndexingPositionMapping {
@@ -69,18 +80,13 @@ impl IndexingPositionMapping {
             plain_values: HashMap::new(),
         }
     }
-    pub fn get_equivalences(&self) -> &[IndexingPositionEquivalence] {
-        &self.equivalences
-    }
-    pub fn get_plain_values(&self) -> &HashMap<IndexingPosition, Expr> {
-        &self.plain_values
-    }
 }
 
 pub fn inspect(group: &RicciGroup) -> Result<IndexingPositionMapping, syn::Error> {
+    let postfix = String::new();
     let mut mapping = IndexingPositionMapping::new();
     let mut equivalences_per_index: HashMap<Ident, IndexingPositionEquivalence> = HashMap::new();
-    inspect_group(group, &mut mapping, &mut equivalences_per_index)?;
+    inspect_group(group, postfix, &mut mapping, &mut equivalences_per_index)?;
     Ok(mapping)
 }
 
@@ -98,9 +104,19 @@ fn create_duplicated_index_error(index: &Ident) -> Result<(), syn::Error> {
     ))
 }
 
+const POSTFIX_CHARS: &[char] = &[
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+    'j',
+];
+
+fn to_char(i: usize) -> char {
+    *POSTFIX_CHARS.get(i).expect("Too many indexes!")
+}
+
 fn inspect_indexers(
     head_name: &Ident,
     position: usize,
+    rank: usize,
     kind: HeadKind,
     indexer: &RicciIndexer,
     mapping: &mut IndexingPositionMapping,
@@ -115,7 +131,7 @@ fn inspect_indexers(
                 .entry(index.clone())
                 .and_modify(|eq| {
                     eq.positions
-                        .push(IndexingPosition::new(head_name, position, kind))
+                        .push(IndexingPosition::new(head_name, position, rank, kind))
                 });
         }
         RicciIndexer::Reverse { index } => {
@@ -126,24 +142,23 @@ fn inspect_indexers(
                 .entry(index.clone())
                 .and_modify(|eq| {
                     eq.positions
-                        .push(IndexingPosition::new(head_name, position, kind))
+                        .push(IndexingPosition::new(head_name, position, rank, kind))
                 });
         }
         RicciIndexer::Reindexing {
             reindexing_name,
             indexers,
         } => {
-            let positions = vec![
-                IndexingPosition::new(head_name, position, kind),
-                IndexingPosition::new_indexer_result(reindexing_name),
-            ];
-            mapping
-                .equivalences
-                .push(IndexingPositionEquivalence { positions });
+            let position_a = IndexingPosition::new(head_name, position, rank, kind);
+            let position_b = IndexingPosition::new_indexer_result(reindexing_name);
+            let equivalence = IndexingPositionEquivalence::from_positions(position_a, position_b);
+            mapping.equivalences.push(equivalence);
+            let rank = indexers.len();
             for (position, indexer) in indexers.iter().enumerate() {
                 inspect_indexers(
                     reindexing_name,
                     position,
+                    rank,
                     HeadKind::Indexer,
                     indexer,
                     mapping,
@@ -153,7 +168,7 @@ fn inspect_indexers(
         }
         RicciIndexer::Plain { expr } => {
             mapping.plain_values.insert(
-                IndexingPosition::new(head_name, position, kind),
+                IndexingPosition::new(head_name, position, rank, kind),
                 *expr.clone(),
             );
         }
@@ -163,19 +178,22 @@ fn inspect_indexers(
 
 fn inspect_group(
     group: &RicciGroup,
+    postfix: String,
     mapping: &mut IndexingPositionMapping,
     equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
 ) -> Result<(), syn::Error> {
-    for segment in &group.segments {
+    for (i, segment) in group.segments.iter().enumerate() {
         match segment {
             RicciSegment::TensorCall {
                 tensor_name,
                 indexers,
             } => {
+                let rank = indexers.len();
                 for (position, indexer) in indexers.iter().enumerate() {
                     inspect_indexers(
                         tensor_name,
                         position,
+                        rank,
                         HeadKind::Tensor,
                         indexer,
                         mapping,
@@ -190,10 +208,12 @@ fn inspect_group(
                         create_duplicated_index_error(index)?;
                     }
                     new_indexes.push(index.clone());
-                    equivalences_per_index
-                        .insert(index.clone(), IndexingPositionEquivalence::new());
+                    let equivalence =
+                        IndexingPositionEquivalence::new(index.clone(), postfix.clone());
+                    equivalences_per_index.insert(index.clone(), equivalence);
                 }
-                inspect_group(&lambda.body, mapping, equivalences_per_index)?;
+                let new_postfix = format!("{}{}", postfix, to_char(i));
+                inspect_group(&lambda.body, new_postfix, mapping, equivalences_per_index)?;
                 for index in new_indexes {
                     let equivalence = equivalences_per_index.remove(&index).unwrap();
                     if !equivalence.positions.is_empty() {
@@ -202,7 +222,8 @@ fn inspect_group(
                 }
             }
             RicciSegment::SubGroup { group, .. } => {
-                inspect_group(group, mapping, equivalences_per_index)?;
+                let new_postfix = format!("{}{}", postfix, to_char(i));
+                inspect_group(group, new_postfix, mapping, equivalences_per_index)?;
             }
             RicciSegment::Token(_) => {}
         }
@@ -213,7 +234,7 @@ fn inspect_group(
 #[cfg(test)]
 mod tests {
     use crate::{
-        inspection::{HeadKind, inspect},
+        inspection::{HeadKind, IndexingPositionMapping, inspect},
         model::lambda::RicciGroup,
     };
 
@@ -228,8 +249,10 @@ mod tests {
 
         let mapping = inspect(&lambda).unwrap();
 
-        let equivalences = mapping.get_equivalences();
-        let plain_values = mapping.get_plain_values();
+        let IndexingPositionMapping {
+            equivalences,
+            plain_values,
+        } = mapping;
 
         assert_eq!(0, plain_values.len());
         assert_eq!(1, equivalences.len());
@@ -242,8 +265,10 @@ mod tests {
 
         let mapping = inspect(&lambda).unwrap();
 
-        let equivalences = mapping.get_equivalences();
-        let plain_values = mapping.get_plain_values();
+        let IndexingPositionMapping {
+            equivalences,
+            plain_values,
+        } = mapping;
 
         assert_eq!(0, plain_values.len());
         assert_eq!(3, equivalences.len());
@@ -265,7 +290,7 @@ mod tests {
 
         let mapping = inspect(&lambda).unwrap();
 
-        let equivalences = mapping.get_equivalences();
+        let IndexingPositionMapping { equivalences, .. } = mapping;
 
         assert_eq!(3, equivalences.len());
         assert_eq!(1, equivalences[0].positions.len());
@@ -289,7 +314,7 @@ mod tests {
 
         let mapping = inspect(&lambda).unwrap();
 
-        let equivalences = mapping.get_equivalences();
+        let IndexingPositionMapping { equivalences, .. } = mapping;
 
         assert_eq!(6, equivalences.len());
         assert_eq!(2, equivalences[0].positions.len());
