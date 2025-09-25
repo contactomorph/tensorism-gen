@@ -1,13 +1,12 @@
 use proc_macro2::{Delimiter, Group, Literal, TokenStream, TokenTree};
 
-use crate::inspection::{HeadKind, IndexingPosition, IndexingPositionEquivalence};
+use crate::analysis::types::{
+    HeadKind, IndexingPosition, IndexingPositionEquivalence, IndexingPositionMapping,
+};
 use crate::model::header::RicciIndexer;
 use crate::model::lambda::RicciLambda;
+use crate::model::lambda::{RicciGroup, RicciSegment};
 use crate::quote::ToTokens;
-use crate::{
-    inspection::IndexingPositionMapping,
-    model::lambda::{RicciGroup, RicciSegment},
-};
 
 fn process_lambda(lambda: RicciLambda, output: &mut TokenStream) {
     let mut body = TokenStream::new();

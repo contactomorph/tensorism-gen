@@ -52,9 +52,9 @@ extern crate quote;
 
 use proc_macro2::{Literal, TokenStream, TokenTree};
 
+mod analysis;
 #[cfg(test)]
 mod assert;
-mod inspection;
 mod model;
 mod parsing;
 mod production;
@@ -64,6 +64,8 @@ mod types;
 use parsing::parse;
 use quote::ToTokens;
 use sequentialization::sequentialize;
+
+use crate::analysis::inspection::inspect;
 
 fn simplify(text: &str) -> String {
     let mut result = String::new();
@@ -108,7 +110,7 @@ pub fn new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let message = format!("Failed to parse input: {}", error);
             quote! { compile_error!(#message) }.into()
         }
-        Ok(group) => match inspection::inspect(&group) {
+        Ok(group) => match inspect(&group) {
             Err(error) => {
                 let message = format!("Index issues: {}", error);
                 quote! { compile_error!(#message) }.into()
@@ -126,7 +128,7 @@ pub fn format_new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenS
             let message = format!("Failed to parse input: {}", error);
             quote! { compile_error!(#message) }.into()
         }
-        Ok(group) => match inspection::inspect(&group) {
+        Ok(group) => match inspect(&group) {
             Err(error) => {
                 let message = format!("Index issues: {}", error);
                 quote! { compile_error!(#message) }.into()
