@@ -22,3 +22,4 @@ proc-macro = true
 
 [dev-dependencies]
 ndarray = "0.16.1"
+"asserts" = { path = "./asserts" }

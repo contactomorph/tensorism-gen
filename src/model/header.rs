@@ -171,10 +171,7 @@ impl Display for RicciAliasDeclaration {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        assert::Assert,
-        model::header::{RicciAliasDeclaration, RicciIndexDeclaration},
-    };
+    use crate::model::header::{RicciAliasDeclaration, RicciIndexDeclaration};
 
     use quote::quote;
 
@@ -183,28 +180,28 @@ mod tests {
         let tokens = quote!(for i j);
 
         assert_eq!(
-            Assert::parse_and_display::<RicciIndexDeclaration>(tokens),
+            asserts::parse_and_display::<RicciIndexDeclaration>(tokens),
             "∀ i j"
         );
 
         let tokens = quote!(let i = plain: 4 + g());
 
         assert_eq!(
-            Assert::parse_and_display::<RicciAliasDeclaration>(tokens),
+            asserts::parse_and_display::<RicciAliasDeclaration>(tokens),
             "∙ i ≔ « 4 + g () »"
         );
 
         let tokens = quote!(let i = rev: long_index_name);
 
         assert_eq!(
-            Assert::parse_and_display::<RicciAliasDeclaration>(tokens),
+            asserts::parse_and_display::<RicciAliasDeclaration>(tokens),
             "∙ i ≔ ↺ long_index_name"
         );
 
         let tokens = quote!(let i = f[a, b, c]);
 
         assert_eq!(
-            Assert::parse_and_display::<RicciAliasDeclaration>(tokens),
+            asserts::parse_and_display::<RicciAliasDeclaration>(tokens),
             "∙ i ≔ f ⦇ a , b , c ⦈"
         );
     }

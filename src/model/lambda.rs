@@ -204,10 +204,7 @@ impl Display for RicciLambda {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        assert::Assert,
-        model::lambda::{RicciGroup, RicciLambda},
-    };
+    use crate::model::lambda::{RicciGroup, RicciLambda};
 
     use quote::quote;
 
@@ -216,14 +213,14 @@ mod tests {
         let tokens = quote!(for i => a[i] + 3);
 
         assert_eq!(
-            Assert::parse_and_display::<RicciLambda>(tokens),
+            asserts::parse_and_display::<RicciLambda>(tokens),
             "∀ i ▸ a ⟦ i ⟧ + 3"
         );
 
         let tokens = quote!(for i j let k = sort[j] => a[i, j] + 4 * b[k]);
 
         assert_eq!(
-            Assert::parse_and_display::<RicciLambda>(tokens),
+            asserts::parse_and_display::<RicciLambda>(tokens),
             "∀ i j ∙ k ≔ sort ⦇ j ⦈ ▸ a ⟦ i , j ⟧ + 4 * b ⟦ k ⟧"
         );
     }
@@ -233,28 +230,28 @@ mod tests {
         let tokens = quote!(for i => a[i] + sum(for j => b[i, j]));
 
         assert_eq!(
-            Assert::parse_and_display::<RicciLambda>(tokens),
+            asserts::parse_and_display::<RicciLambda>(tokens),
             "∀ i ▸ a ⟦ i ⟧ + sum (∀ j ▸ b ⟦ i , j ⟧)"
         );
 
         let tokens = quote!(for i => a[i] + sum(for j => b[every3[i], j]));
 
         assert_eq!(
-            Assert::parse_and_display::<RicciLambda>(tokens),
+            asserts::parse_and_display::<RicciLambda>(tokens),
             "∀ i ▸ a ⟦ i ⟧ + sum (∀ j ▸ b ⟦ every3 ⦇ i ⦈ , j ⟧)"
         );
 
         let tokens = quote!(3.5 * median(for i => a[i] + sum(for j => b[every3[i], j])));
 
         assert_eq!(
-            Assert::parse_and_display::<RicciGroup>(tokens),
+            asserts::parse_and_display::<RicciGroup>(tokens),
             " 3.5 * median (∀ i ▸ a ⟦ i ⟧ + sum (∀ j ▸ b ⟦ every3 ⦇ i ⦈ , j ⟧))"
         );
 
         let tokens = quote!(3.5 * median(for i => a[i] + sum(for j => if i < j { b[every3[i], j] } else { c[j] + 4.0 })));
 
         assert_eq!(
-            Assert::parse_and_display::<RicciGroup>(tokens),
+            asserts::parse_and_display::<RicciGroup>(tokens),
             " 3.5 * median (∀ i ▸ a ⟦ i ⟧ + sum (∀ j ▸ if i < j { b ⟦ every3 ⦇ i ⦈ , j ⟧} else { c ⟦ j ⟧ + 4.0}))"
         );
     }
@@ -264,14 +261,14 @@ mod tests {
         let tokens = quote!(for i => { let name = a[i]; name });
 
         assert_eq!(
-            Assert::parse_and_display::<RicciLambda>(tokens),
+            asserts::parse_and_display::<RicciLambda>(tokens),
             "Failed to parse type `tensorism_gen::model::lambda::RicciLambda`: Keyword let is illegal."
         );
 
         let tokens = quote!(for i => { while ok { a[i] } });
 
         assert_eq!(
-            Assert::parse_and_display::<RicciLambda>(tokens),
+            asserts::parse_and_display::<RicciLambda>(tokens),
             "Failed to parse type `tensorism_gen::model::lambda::RicciLambda`: Keyword while is illegal."
         );
     }

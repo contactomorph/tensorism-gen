@@ -53,8 +53,6 @@ extern crate quote;
 use proc_macro2::{Literal, TokenStream, TokenTree};
 
 mod analysis;
-#[cfg(test)]
-mod assert;
 mod model;
 mod parsing;
 mod production;

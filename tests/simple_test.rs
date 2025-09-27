@@ -5,32 +5,32 @@ use tensorism_gen::{format_new_ndarray2, new_ndarray2};
 fn simple_lambda_format() {
     let format = format_new_ndarray2!(for i => tensor[i] + i);
 
-    assert_eq!(
-        format.to_string(),
-        "{ \
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor); \
-            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(\
-                global_dim_for_i, \
-                | i | { \
-                    (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, i) }) + i \
-                }\
-            ) \
+    asserts::equivalent!(
+        format,
+        r"{
+            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor);
+            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
+                global_dim_for_i,
+                | i | {
+                    (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, i) }) + i
+                }
+            )
         } "
     );
 
     let format = format_new_ndarray2!(for i j => tensor[i, j]);
 
-    assert_eq!(
-        format.to_string(),
-        "{ \
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).0; \
-            let global_dim_for_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).1; \
-            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(\
-                (global_dim_for_i, global_dim_for_j,), \
-                | (i, j,) | { \
-                    (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, (i, j,)) }) \
-                }\
-            ) \
+    asserts::equivalent!(
+        format,
+        r"{
+            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).0;
+            let global_dim_for_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).1;
+            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
+                (global_dim_for_i, global_dim_for_j,),
+                | (i, j,) | {
+                    (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, (i, j,)) })
+                }
+            )
         } "
     );
 }
@@ -55,23 +55,23 @@ fn simple_lambda_generation() {
 
 #[test]
 fn layered_lambda_format() {
-    let format = format_new_ndarray2!(for i => (for j => tensor1[i, j]).sum() + (for j => tensor2[j, i]).sum() * tensor3[i]);
-    assert_eq!(
-        format.to_string(),
-        "{ \
-            let local_dim_for_00_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1; \
-            let local_dim_for_20_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0; \
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0; \
-            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(\
-                global_dim_for_i, \
-                | i | { \
-                    (\
-                        (0usize .. local_dim_for_00_j).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor1, (i, j,)) }) })\
-                    ).sum() + (\
-                        (0usize .. local_dim_for_20_j).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor2, (j, i,)) }) })\
-                    ).sum() * (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor3, i) }) \
-                }\
-            ) \
+    let format = format_new_ndarray2!(for i => (for j => tensor1[i, j]).sum::<i32>() + (for j => tensor2[j, i]).sum::<i32>() * tensor3[i]);
+    asserts::equivalent!(
+        format,
+        r"{
+            let local_dim_for_00_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
+            let local_dim_for_20_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0;
+            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
+            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
+                global_dim_for_i,
+                | i | {
+                    (
+                        (0usize .. local_dim_for_00_j).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor1, (i, j,)) }) })
+                    ).sum ::< i32 > () + (
+                        (0usize .. local_dim_for_20_j).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor2, (j, i,)) }) })
+                    ).sum ::< i32 > () * (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor3, i) })
+                }
+            )
         } "
     );
 }
@@ -97,7 +97,7 @@ fn tensor_references_are_accepted() {
 
     let tensor1_ref = &mut tensor1;
     let tensor2_ref = &tensor2;
-    
+
     let result = new_ndarray2!(for i => tensor1_ref[i] + tensor2_ref[i]);
     let expected = Array1::from_vec(vec![0, 0, 0, 0, 0, 0, 0]);
     assert_eq!(expected, result)
