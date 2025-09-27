@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use proc_macro2::Ident;
 
 use crate::analysis::types::{
-    HeadKind, IndexingPosition, IndexingPositionEquivalence, IndexingPositionMapping,
+    Discriminant, HeadKind, IndexingPosition, IndexingPositionEquivalence, IndexingPositionMapping,
 };
+use crate::model::lambda::RicciLambda;
 use crate::model::{
     header::RicciIndexer,
     lambda::{RicciGroup, RicciSegment},
@@ -24,13 +25,26 @@ fn create_duplicated_index_error(index: &Ident) -> Result<(), syn::Error> {
     ))
 }
 
-const POSTFIX_CHARS: &[char] = &[
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-    'j',
-];
-
-fn to_char(i: usize) -> char {
-    *POSTFIX_CHARS.get(i).expect("Too many indexes!")
+fn create_position(name: &Ident, position: usize, rank: usize, kind: HeadKind) -> IndexingPosition {
+    match kind {
+        HeadKind::Indexer => IndexingPosition {
+            name: name.clone(),
+            content: super::types::IndexingPositionContent::IndexerSpecificIndex(position),
+        },
+        HeadKind::Tensor => {
+            if rank == 1 {
+                IndexingPosition {
+                    name: name.clone(),
+                    content: super::types::IndexingPositionContent::TensorSingleIndex,
+                }
+            } else {
+                IndexingPosition {
+                    name: name.clone(),
+                    content: super::types::IndexingPositionContent::TensorSpecificIndex(position),
+                }
+            }
+        }
+    }
 }
 
 fn inspect_indexers(
@@ -51,7 +65,7 @@ fn inspect_indexers(
                 .entry(index.clone())
                 .and_modify(|eq| {
                     eq.positions
-                        .push(IndexingPosition::new(head_name, position, rank, kind))
+                        .push(create_position(head_name, position, rank, kind))
                 });
         }
         RicciIndexer::Reverse { index } => {
@@ -62,15 +76,18 @@ fn inspect_indexers(
                 .entry(index.clone())
                 .and_modify(|eq| {
                     eq.positions
-                        .push(IndexingPosition::new(head_name, position, rank, kind))
+                        .push(create_position(head_name, position, rank, kind))
                 });
         }
         RicciIndexer::Reindexing {
             reindexing_name,
             indexers,
         } => {
-            let position_a = IndexingPosition::new(head_name, position, rank, kind);
-            let position_b = IndexingPosition::new_indexer_result(reindexing_name);
+            let position_a = create_position(head_name, position, rank, kind);
+            let position_b = IndexingPosition {
+                name: reindexing_name.clone(),
+                content: super::types::IndexingPositionContent::IndexerResult,
+            };
             let equivalence = IndexingPositionEquivalence::from_positions(position_a, position_b);
             mapping.equivalences.push(equivalence);
             let rank = indexers.len();
@@ -88,7 +105,7 @@ fn inspect_indexers(
         }
         RicciIndexer::Plain { expr } => {
             mapping.plain_values.insert(
-                IndexingPosition::new(head_name, position, rank, kind),
+                create_position(head_name, position, rank, kind),
                 *expr.clone(),
             );
         }
@@ -96,13 +113,44 @@ fn inspect_indexers(
     Ok(())
 }
 
-fn inspect_group(
-    group: &RicciGroup,
-    postfix: String,
+fn inspect_lambda(
+    lambda: &RicciLambda,
+    discriminant: Discriminant,
     mapping: &mut IndexingPositionMapping,
     equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
 ) -> Result<(), syn::Error> {
-    for (i, segment) in group.segments.iter().enumerate() {
+    let mut new_indexes = Vec::new();
+    for index in &lambda.index_declaration.indexes {
+        if equivalences_per_index.contains_key(index) {
+            create_duplicated_index_error(index)?;
+        }
+        new_indexes.push(index.clone());
+        let equivalence = IndexingPositionEquivalence::new(index.clone(), discriminant.clone());
+        equivalences_per_index.insert(index.clone(), equivalence);
+    }
+    inspect_segments(
+        &lambda.body.segments,
+        discriminant,
+        mapping,
+        equivalences_per_index,
+    )?;
+    for index in new_indexes {
+        let equivalence = equivalences_per_index.remove(&index).unwrap();
+        if !equivalence.positions.is_empty() {
+            mapping.equivalences.push(equivalence);
+        }
+    }
+    Ok(())
+}
+
+fn inspect_segments(
+    segments: &[RicciSegment],
+    discriminant: Discriminant,
+    mapping: &mut IndexingPositionMapping,
+    equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
+) -> Result<(), syn::Error> {
+    let mut i = 0;
+    for segment in segments {
         match segment {
             RicciSegment::TensorCall {
                 tensor_name,
@@ -122,28 +170,19 @@ fn inspect_group(
                 }
             }
             RicciSegment::SubLambda(lambda) => {
-                let mut new_indexes = Vec::new();
-                for index in &lambda.index_declaration.indexes {
-                    if equivalences_per_index.contains_key(index) {
-                        create_duplicated_index_error(index)?;
-                    }
-                    new_indexes.push(index.clone());
-                    let equivalence =
-                        IndexingPositionEquivalence::new(index.clone(), postfix.clone());
-                    equivalences_per_index.insert(index.clone(), equivalence);
-                }
-                let new_postfix = format!("{}{}", postfix, to_char(i));
-                inspect_group(&lambda.body, new_postfix, mapping, equivalences_per_index)?;
-                for index in new_indexes {
-                    let equivalence = equivalences_per_index.remove(&index).unwrap();
-                    if !equivalence.positions.is_empty() {
-                        mapping.equivalences.push(equivalence);
-                    }
-                }
+                let new_discriminant = discriminant.extend(i);
+                i += 1;
+                inspect_lambda(lambda, new_discriminant, mapping, equivalences_per_index)?;
             }
             RicciSegment::SubGroup { group, .. } => {
-                let new_postfix = format!("{}{}", postfix, to_char(i));
-                inspect_group(group, new_postfix, mapping, equivalences_per_index)?;
+                let new_discriminant = discriminant.extend(i);
+                i += 1;
+                inspect_segments(
+                    &group.segments,
+                    new_discriminant,
+                    mapping,
+                    equivalences_per_index,
+                )?;
             }
             RicciSegment::Token(_) => {}
         }
@@ -151,11 +190,38 @@ fn inspect_group(
     Ok(())
 }
 
+fn inspect_main_group(
+    group: &RicciGroup,
+    mapping: &mut IndexingPositionMapping,
+    equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
+) -> Result<(), syn::Error> {
+    if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
+        for segment in &group.segments {
+            if let RicciSegment::SubLambda(lambda) = segment {
+                return inspect_lambda(
+                    lambda,
+                    Discriminant::new(),
+                    mapping,
+                    equivalences_per_index,
+                );
+            }
+        }
+        unreachable!()
+    } else {
+        let discriminant = Discriminant::new();
+        inspect_segments(
+            &group.segments,
+            discriminant,
+            mapping,
+            equivalences_per_index,
+        )
+    }
+}
+
 pub fn inspect(group: &RicciGroup) -> Result<IndexingPositionMapping, syn::Error> {
-    let postfix = String::new();
     let mut mapping = IndexingPositionMapping::new();
     let mut equivalences_per_index: HashMap<Ident, IndexingPositionEquivalence> = HashMap::new();
-    inspect_group(group, postfix, &mut mapping, &mut equivalences_per_index)?;
+    inspect_main_group(group, &mut mapping, &mut equivalences_per_index)?;
     Ok(mapping)
 }
 

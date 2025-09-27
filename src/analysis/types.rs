@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use proc_macro2::Ident;
 use syn::Expr;
@@ -10,48 +10,83 @@ pub enum HeadKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+pub enum IndexingPositionContent {
+    TensorSingleIndex,
+    TensorSpecificIndex(usize),
+    IndexerSpecificIndex(usize),
+    IndexerResult,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct IndexingPosition {
     pub name: Ident,
-    pub position: usize,
-    pub rank: usize,
-    pub kind: HeadKind,
+    pub content: IndexingPositionContent,
 }
 
-impl IndexingPosition {
-    pub fn new(name: &Ident, position: usize, rank: usize, kind: HeadKind) -> Self {
-        Self {
-            name: name.clone(),
-            position,
-            rank,
-            kind,
-        }
-    }
-    pub fn new_indexer_result(name: &Ident) -> Self {
-        Self {
-            name: name.clone(),
-            position: Self::RETURN_POSITION,
-            rank: Self::RETURN_POSITION,
-            kind: HeadKind::Indexer,
-        }
-    }
-    pub const RETURN_POSITION: usize = usize::MAX;
-}
-
+#[cfg(test)]
 impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
     fn eq(&self, other: &(&str, usize, HeadKind)) -> bool {
-        self.name == other.0 && self.position == other.1 && self.kind == other.2
+        if self.name != other.0 {
+            return false;
+        }
+        match self.content {
+            IndexingPositionContent::IndexerResult => {
+                other.2 == HeadKind::Indexer && other.1 == usize::MAX
+            }
+            IndexingPositionContent::IndexerSpecificIndex(pos) => {
+                other.2 == HeadKind::Indexer && other.1 == pos
+            }
+            IndexingPositionContent::TensorSingleIndex => {
+                other.2 == HeadKind::Tensor && other.1 == 0
+            }
+            IndexingPositionContent::TensorSpecificIndex(pos) => {
+                other.2 == HeadKind::Tensor && other.1 == pos
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Discriminant {
+    data: String,
+}
+
+impl Discriminant {
+    pub fn new() -> Self {
+        Self {
+            data: String::new(),
+        }
+    }
+
+    pub fn extend(&self, i: usize) -> Self {
+        let c = *Self::CHARS.get(i).expect("Too many indexes!");
+        let data = format!("{}{}", &self.data, c);
+        Self { data }
+    }
+
+    const CHARS: &[char] = &[
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+        'i', 'j', 'k', 'l',
+    ];
+}
+
+impl Deref for Discriminant {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
     }
 }
 
 pub struct IndexingPositionEquivalence {
-    pub index: Option<(Ident, String)>,
+    pub index: Option<(Ident, Discriminant)>,
     pub positions: Vec<IndexingPosition>,
 }
 
 impl IndexingPositionEquivalence {
-    pub fn new(index: Ident, postfix: String) -> Self {
+    pub fn new(index: Ident, discriminant: Discriminant) -> Self {
         Self {
-            index: Some((index, postfix)),
+            index: Some((index, discriminant)),
             positions: Vec::new(),
         }
     }
