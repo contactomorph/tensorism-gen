@@ -89,3 +89,16 @@ fn layered_lambda_generation() {
     let expected = Array1::from_vec(vec![-43i32, -12, -21, -95, -40, -60, -12]);
     assert_eq!(expected, result)
 }
+
+#[test]
+fn tensor_references_are_accepted() {
+    let mut tensor1 = Array1::<i32>::from_shape_fn(7, |i| i as i32);
+    let tensor2 = Array1::<i32>::from_shape_fn(7, |i| -(i as i32));
+
+    let tensor1_ref = &mut tensor1;
+    let tensor2_ref = &tensor2;
+    
+    let result = new_ndarray2!(for i => tensor1_ref[i] + tensor2_ref[i]);
+    let expected = Array1::from_vec(vec![0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(expected, result)
+}
