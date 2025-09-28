@@ -58,10 +58,12 @@ fn layered_lambda_format() {
     let format = format_new_ndarray2!(for i => (for j => tensor1[i, j]).sum::<i32>() + (for j => tensor2[j, i]).sum::<i32>() * tensor3[i]);
     asserts::equivalent!(
         format,
-        r"{
+        r##"{
             let local_dim_for_00_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
             let local_dim_for_20_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0;
             let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
+            if global_dim_for_i != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 { panic! ( "Dimensions are not matching" ); }
+            if global_dim_for_i != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ) { panic! ( "Dimensions are not matching" ); }
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 global_dim_for_i,
                 | i | {
@@ -72,7 +74,7 @@ fn layered_lambda_format() {
                     ).sum ::< i32 > () * (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor3, i) })
                 }
             )
-        } "
+        } "##
     );
 }
 
@@ -101,4 +103,12 @@ fn tensor_references_are_accepted() {
     let result = new_ndarray2!(for i => tensor1_ref[i] + tensor2_ref[i]);
     let expected = Array1::from_vec(vec![0, 0, 0, 0, 0, 0, 0]);
     assert_eq!(expected, result)
+}
+
+#[test]
+#[should_panic]
+fn panic_when_dimensions_are_non_matchin() {
+    let tensor1 = Array1::<i32>::from_shape_fn(7, |i| i as i32);
+    let tensor2 = Array1::<i32>::from_shape_fn(6, |i| -(i as i32));
+    new_ndarray2!(for i => tensor1[i] + tensor2[i]);
 }

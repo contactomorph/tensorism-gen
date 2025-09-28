@@ -178,17 +178,31 @@ pub fn produce_prelude(mapping: IndexingPositionMapping) -> TokenStream {
         let IndexingPositionEquivalence { index, positions } = equivalence;
         match index {
             Some((index_name, discriminant)) => {
-                for position in positions.iter().take(1) {
+                let mut maybe_dimension_var: Option<Ident> = None;
+                for position in positions.iter() {
                     let value = produce_dimension_value(position);
-                    let dimension_var = if discriminant.is_empty() {
-                        create_global_dim_identifier(&index_name)
-                    } else {
-                        create_local_dim_identifier(&index_name, &discriminant)
-                    };
-                    let definition = quote! {
-                        let #dimension_var = #value;
-                    };
-                    content.extend(definition);
+                    match &maybe_dimension_var {
+                        None => {
+                            let dimension_var = if discriminant.is_empty() {
+                                create_global_dim_identifier(&index_name)
+                            } else {
+                                create_local_dim_identifier(&index_name, &discriminant)
+                            };
+                            let definition = quote! {
+                                let #dimension_var = #value;
+                            };
+                            content.extend(definition);
+                            maybe_dimension_var = Some(dimension_var);
+                        }
+                        Some(dimension_var) => {
+                            let consistency_check = quote! {
+                                if #dimension_var != #value {
+                                    panic!("Dimensions are not matching");
+                                }
+                            };
+                            content.extend(consistency_check);
+                        }
+                    }
                 }
             }
             None => {
