@@ -27,7 +27,17 @@ fn process_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut 
     if indexes.len() == 1 {
         let index = &indexes[0];
         let dimension_name = create_local_dim_identifier(index, &discriminant);
-        let lambda_stream = quote! {(0usize..#dimension_name).map(|#index| { #body }) };
+
+        let lambda_stream = match lambda.filter {
+            Some(filter) => {
+                let mut condition = TokenStream::new();
+                process_segments(filter.segments, discriminant.clone(), &mut condition);
+                quote! {(0usize..#dimension_name).filter(|&#index| { #condition }).map(|#index| { #body }) }
+            }
+            None => {
+                quote! {(0usize..#dimension_name).map(|#index| { #body }) }
+            }
+        };
         output.extend(lambda_stream);
     } else {
         let indexes_tuple = quote! {(#(#indexes),*, )};
@@ -36,12 +46,21 @@ fn process_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut 
         for (i, index) in indexes.iter().enumerate() {
             let dimension_name = create_local_dim_identifier(index, &discriminant);
             header = if i == 0 {
-                quote! {(0usize..#dimension_name).map(move |#index| #header)}
+                quote! {(0usize..#dimension_name).map(move |#index| { #header })}
             } else {
-                quote! {(0usize..#dimension_name).flat_map(move |#index| #header)}
+                quote! {(0usize..#dimension_name).flat_map(move |#index| { #header })}
             }
         }
-        let lambda_stream = quote! { #header.map(|#indexes_tuple| { #body }) };
+        let lambda_stream = match lambda.filter {
+            Some(filter) => {
+                let mut condition = TokenStream::new();
+                process_segments(filter.segments, discriminant.clone(), &mut condition);
+                quote! { #header.filter(|&#indexes_tuple| { #condition }).map(|#indexes_tuple| { #body }) }
+            }
+            None => {
+                quote! { #header.map(|#indexes_tuple| { #body }) }
+            }
+        };
         output.extend(lambda_stream);
     }
 }
@@ -105,6 +124,9 @@ fn process_segments(
 }
 
 fn process_main_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut TokenStream) {
+    if lambda.filter.is_some() {
+        panic!("Macro level lambda cannot have a filter.");
+    }
     let dimensions = &lambda
         .index_declaration
         .indexes

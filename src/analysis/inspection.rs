@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use proc_macro2::Ident;
+use syn::Error;
 
 use crate::analysis::types::{
     Discriminant, HeadKind, IndexingPosition, IndexingPositionEquivalence, IndexingPositionMapping,
@@ -198,6 +199,12 @@ fn inspect_main_group(
     if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
         for segment in &group.segments {
             if let RicciSegment::SubLambda(lambda) = segment {
+                if let Some(filter) = &lambda.filter {
+                    return Err(Error::new_spanned(
+                        filter.if_keyword,
+                        "Macro level lambda cannot have a filter.",
+                    ));
+                }
                 return inspect_lambda(
                     lambda,
                     Discriminant::new(),
@@ -352,5 +359,17 @@ mod tests {
             &("every3", 0, HeadKind::Indexer)
         );
         assert_eq!(&equivalences[5].positions[2], &("e", 1, HeadKind::Tensor));
+    }
+
+    #[test]
+    fn inspect_invalid_lambda() {
+        let tokens = quote!(for i if a[i] < 5 => a[i] + 3);
+
+        let lambda = parse2::<RicciGroup>(tokens).unwrap();
+
+        match inspect(&lambda) {
+            Ok(_) => panic!("Expected error"),
+            Err(err) => assert_eq!(err.to_string(), "Macro level lambda cannot have a filter."),
+        }
     }
 }

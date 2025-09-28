@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use proc_macro2::{Delimiter, TokenTree};
 use syn::parse::{Parse, ParseStream};
-use syn::{Error, Expr, Ident, Result, Token, braced, bracketed, parenthesized};
+use syn::{Error, Ident, Result, Token, braced, bracketed, parenthesized};
 
 use crate::model::header::{RicciAliasDeclaration, RicciIndexDeclaration, RicciIndexer};
 
@@ -42,10 +42,15 @@ pub struct RicciGroup {
     pub segments: Vec<RicciSegment>,
 }
 
+pub struct RicciFilter {
+    pub if_keyword: Token![if],
+    pub segments: Vec<RicciSegment>,
+}
+
 pub struct RicciLambda {
     pub index_declaration: RicciIndexDeclaration,
     pub alias_declarations: Vec<RicciAliasDeclaration>,
-    pub _filter: Option<Box<Expr>>,
+    pub filter: Option<RicciFilter>,
     pub body: RicciGroup,
 }
 
@@ -127,6 +132,21 @@ impl Parse for RicciGroup {
     }
 }
 
+impl Parse for RicciFilter {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let if_keyword = input.parse::<Token![if]>()?;
+        let mut segments = Vec::<RicciSegment>::new();
+        while !input.is_empty() && !input.peek(Token![=>]) {
+            let segment = input.parse::<RicciSegment>()?;
+            segments.push(segment);
+        }
+        Ok(Self {
+            if_keyword,
+            segments,
+        })
+    }
+}
+
 impl Parse for RicciLambda {
     fn parse(input: ParseStream) -> Result<Self> {
         let index_declaration: RicciIndexDeclaration = input.parse()?;
@@ -137,6 +157,11 @@ impl Parse for RicciLambda {
             let alias_declaration: RicciAliasDeclaration = input.parse()?;
             alias_declarations.push(alias_declaration);
         }
+        let filter = if input.peek(Token![if]) {
+            Some(input.parse::<RicciFilter>()?)
+        } else {
+            None
+        };
 
         input.parse::<Token![=>]>()?;
         let body: RicciGroup = input.parse()?;
@@ -144,7 +169,7 @@ impl Parse for RicciLambda {
         Ok(Self {
             index_declaration,
             alias_declarations,
-            _filter: None,
+            filter,
             body,
         })
     }
@@ -191,11 +216,24 @@ impl Display for RicciGroup {
     }
 }
 
+impl Display for RicciFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "?")?;
+        for segment in &self.segments {
+            segment.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+
 impl Display for RicciLambda {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ", self.index_declaration)?;
         for alias_declaration in &self.alias_declarations {
             write!(f, "{} ", alias_declaration)?;
+        }
+        if let Some(filter) = &self.filter {
+            write!(f, "{} ", filter)?;
         }
         write!(f, "▸{}", self.body)?;
         Ok(())
@@ -270,6 +308,23 @@ mod tests {
         assert_eq!(
             asserts::parse_and_display::<RicciLambda>(tokens),
             "Failed to parse type `tensorism_gen::model::lambda::RicciLambda`: Keyword while is illegal."
+        );
+    }
+
+    #[test]
+    fn parse_filters() {
+        let tokens = quote!(for i if b[i] < a[i] && 0.0 <= c[i, i] => a[i]);
+
+        assert_eq!(
+            asserts::parse_and_display::<RicciLambda>(tokens),
+            "∀ i ? b ⟦ i ⟧ < a ⟦ i ⟧ & & 0.0 < = c ⟦ i , i ⟧ ▸ a ⟦ i ⟧"
+        );
+
+        let tokens = quote!(for i => (for j if tensor2[j] < j => tensor1[i, j]).sum() + i);
+
+        assert_eq!(
+            asserts::parse_and_display::<RicciLambda>(tokens),
+            "∀ i ▸ (∀ j ? tensor2 ⟦ j ⟧ < j ▸ tensor1 ⟦ i , j ⟧) . sum () + i"
         );
     }
 }
