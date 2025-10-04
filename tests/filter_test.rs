@@ -34,7 +34,7 @@ fn filter_lambda_format() {
             let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1;
             let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).0;
             if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).0 {
-                panic! ("Dimensions are not matching");
+                panic! ("Dimensions are not matching between tensor1[ i, _ ] and tensor2[ i, _ ]");
             }
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 dim_number_0,

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use proc_macro2::Ident;
 use syn::Expr;
@@ -27,9 +27,8 @@ pub enum HeadKind {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum IndexingPositionContent {
-    TensorSingleIndex,
-    TensorSpecificIndex(usize),
-    IndexerSpecificIndex(usize),
+    TensorIndex(usize, usize),
+    IndexerIndex(usize, usize),
     IndexerResult,
 }
 
@@ -49,13 +48,10 @@ impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
             IndexingPositionContent::IndexerResult => {
                 other.2 == HeadKind::Indexer && other.1 == usize::MAX
             }
-            IndexingPositionContent::IndexerSpecificIndex(pos) => {
+            IndexingPositionContent::IndexerIndex(pos, _) => {
                 other.2 == HeadKind::Indexer && other.1 == pos
             }
-            IndexingPositionContent::TensorSingleIndex => {
-                other.2 == HeadKind::Tensor && other.1 == 0
-            }
-            IndexingPositionContent::TensorSpecificIndex(pos) => {
+            IndexingPositionContent::TensorIndex(pos, _) => {
                 other.2 == HeadKind::Tensor && other.1 == pos
             }
         }
@@ -67,13 +63,15 @@ pub struct IndexingPositionEquivalence {
     // of a Ricci lambda. Instead of storing the index name, we store this number to avoid index name clashes
     // as the same index name can be used in different sub-lambdas.
     pub ricci_number: usize,
+    pub index: Ident,
     pub positions: Vec<IndexingPosition>,
 }
 
 impl IndexingPositionEquivalence {
-    pub fn new(ricci_number: usize) -> Self {
+    pub fn new(ricci_number: usize, index: Ident) -> Self {
         Self {
             ricci_number,
+            index,
             positions: Vec::new(),
         }
     }
@@ -109,14 +107,13 @@ impl InspectionCollector {
     }
 
     pub fn try_declare_index(&mut self, index: Ident) -> bool {
-        if self.equivalences_per_index.contains_key(&index) {
-            false
-        } else {
+        if let Entry::Vacant(entry) = self.equivalences_per_index.entry(index.clone()) {
             let ricci_number = self.free_ricci_number.get_next();
-            let equivalence = IndexingPositionEquivalence::new(ricci_number);
-            self.equivalences_per_index
-                .insert(index.clone(), equivalence);
+            let equivalence = IndexingPositionEquivalence::new(ricci_number, index);
+            entry.insert(equivalence);
             true
+        } else {
+            false
         }
     }
 
@@ -143,11 +140,20 @@ impl InspectionCollector {
         }
     }
 
-    pub fn save_index_free_equivalence(&mut self, positions: Vec<IndexingPosition>) {
+    pub fn save_indexing_result_equivalence(
+        &mut self,
+        position: IndexingPosition,
+        reindexing_name: &Ident,
+    ) {
         let ricci_number = self.free_ricci_number.get_next();
+        let reindexing_position = IndexingPosition {
+            name: reindexing_name.clone(),
+            content: IndexingPositionContent::IndexerResult,
+        };
         let equivalence = IndexingPositionEquivalence {
             ricci_number,
-            positions,
+            index: reindexing_name.clone(),
+            positions: vec![position, reindexing_position],
         };
         self.mapping.equivalences.push(equivalence);
     }

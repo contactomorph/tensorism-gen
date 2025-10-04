@@ -2,7 +2,8 @@ use proc_macro2::Ident;
 use syn::Error;
 
 use crate::analysis::types::{
-    HeadKind, IndexingPosition, IndexingPositionMapping, InspectionCollector,
+    HeadKind, IndexingPosition, IndexingPositionContent, IndexingPositionMapping,
+    InspectionCollector,
 };
 use crate::model::lambda::RicciLambda;
 use crate::model::{
@@ -28,21 +29,12 @@ fn create_position(name: &Ident, position: usize, rank: usize, kind: HeadKind) -
     match kind {
         HeadKind::Indexer => IndexingPosition {
             name: name.clone(),
-            content: super::types::IndexingPositionContent::IndexerSpecificIndex(position),
+            content: IndexingPositionContent::IndexerIndex(position, rank),
         },
-        HeadKind::Tensor => {
-            if rank == 1 {
-                IndexingPosition {
-                    name: name.clone(),
-                    content: super::types::IndexingPositionContent::TensorSingleIndex,
-                }
-            } else {
-                IndexingPosition {
-                    name: name.clone(),
-                    content: super::types::IndexingPositionContent::TensorSpecificIndex(position),
-                }
-            }
-        }
+        HeadKind::Tensor => IndexingPosition {
+            name: name.clone(),
+            content: IndexingPositionContent::TensorIndex(position, rank),
+        },
     }
 }
 
@@ -71,12 +63,8 @@ fn inspect_indexers(
             reindexing_name,
             indexers,
         } => {
-            let position_a = create_position(head_name, position, rank, kind);
-            let position_b = IndexingPosition {
-                name: reindexing_name.clone(),
-                content: super::types::IndexingPositionContent::IndexerResult,
-            };
-            collector.save_index_free_equivalence(vec![position_a, position_b]);
+            let position = create_position(head_name, position, rank, kind);
+            collector.save_indexing_result_equivalence(position, reindexing_name);
             let rank = indexers.len();
             for (position, indexer) in indexers.iter().enumerate() {
                 inspect_indexers(

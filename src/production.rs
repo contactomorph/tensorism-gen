@@ -172,19 +172,47 @@ fn process_main_group(group: RicciGroup, output: &mut TokenStream) {
 
 fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
     match position.content {
-        IndexingPositionContent::TensorSpecificIndex(pos) => {
+        IndexingPositionContent::TensorIndex(pos, rank) => {
             let tensor_name = &position.name;
             let pos = Literal::usize_unsuffixed(pos);
-            quote! {
-                ::ndarray::ArrayBase::<_, _>::dim(&#tensor_name).#pos
+            if rank == 1 {
+                quote! {
+                    ::ndarray::ArrayBase::<_, _>::dim(&#tensor_name)
+                }
+            } else {
+                quote! {
+                    ::ndarray::ArrayBase::<_, _>::dim(&#tensor_name).#pos
+                }
             }
-        }
-        IndexingPositionContent::TensorSingleIndex => {
-            let tensor_name = &position.name;
-            quote! { ::ndarray::ArrayBase::<_, _>::dim(&#tensor_name) }
         }
         _ => {
             todo!()
+        }
+    }
+}
+
+fn format_position(position: &IndexingPosition, index: &Ident) -> String {
+    match position.content {
+        IndexingPositionContent::IndexerResult => {
+            format!("{}[…]", position.name)
+        }
+        IndexingPositionContent::IndexerIndex(pos, rank) => {
+            let beginning = "_, ".repeat(pos);
+            let end = if pos + 1 < rank {
+                ", _".repeat(rank - pos - 1)
+            } else {
+                String::new()
+            };
+            format!("{}[{}{}{}]", position.name, beginning, index, end)
+        }
+        IndexingPositionContent::TensorIndex(pos, rank) => {
+            let beginning = "_, ".repeat(pos);
+            let end = if pos + 1 < rank {
+                ", _".repeat(rank - pos - 1)
+            } else {
+                String::new()
+            };
+            format!("{}[{}{}{}]", position.name, beginning, index, end)
         }
     }
 }
@@ -195,10 +223,12 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenS
         let IndexingPositionEquivalence {
             ricci_number,
             positions,
+            index,
         } = equivalence;
-        let mut maybe_dimension_var: Option<Ident> = None;
+        let mut maybe_dimension_var: Option<(Ident, String)> = None;
         for position in positions.iter() {
             let value = produce_dimension_value(position);
+            let position = format_position(position, &index);
             match &maybe_dimension_var {
                 None => {
                     let dimension_var = create_dim_identifier(ricci_number);
@@ -206,12 +236,17 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenS
                         let #dimension_var = #value;
                     };
                     content.extend(definition);
-                    maybe_dimension_var = Some(dimension_var);
+                    maybe_dimension_var = Some((dimension_var, position));
                 }
-                Some(dimension_var) => {
+                Some((dimension_var, previous_position)) => {
+                    let message = format!(
+                        "Dimensions are not matching between {} and {}",
+                        previous_position, position
+                    );
+                    let message = Literal::string(message.as_str());
                     let consistency_check = quote! {
                         if #dimension_var != #value {
-                            panic!("Dimensions are not matching");
+                            panic!(#message);
                         }
                     };
                     content.extend(consistency_check);

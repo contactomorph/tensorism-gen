@@ -62,8 +62,12 @@ fn layered_lambda_format() {
             let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
             let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0;
             let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
-            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 { panic! ( "Dimensions are not matching" ); }
-            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ) { panic! ( "Dimensions are not matching" ); }
+            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 {
+                panic! ( "Dimensions are not matching between tensor1[ i, _ ] and tensor2[ _, i ]" );
+            }
+            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ) {
+                panic! ( "Dimensions are not matching between tensor1[ i, _ ] and tensor3[ i ]" );
+            }
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 dim_number_0,
                 | i | {
@@ -106,8 +110,8 @@ fn tensor_references_are_accepted() {
 }
 
 #[test]
-#[should_panic]
-fn panic_when_dimensions_are_non_matchin() {
+#[should_panic(expected = "Dimensions are not matching between tensor1[i] and tensor2[i]")]
+fn panic_when_dimensions_are_non_matching() {
     let tensor1 = Array1::<i32>::from_shape_fn(7, |i| i as i32);
     let tensor2 = Array1::<i32>::from_shape_fn(6, |i| -(i as i32));
     new_ndarray2!(for i => tensor1[i] + tensor2[i]);
