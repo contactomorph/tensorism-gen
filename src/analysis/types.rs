@@ -1,7 +1,23 @@
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 use proc_macro2::Ident;
 use syn::Expr;
+
+pub struct IncreasingInteger {
+    value: usize,
+}
+
+impl IncreasingInteger {
+    pub fn new() -> Self {
+        Self { value: 0 }
+    }
+
+    pub fn get_next(&mut self) -> usize {
+        let current = self.value;
+        self.value += 1;
+        current
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum HeadKind {
@@ -46,54 +62,19 @@ impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Discriminant {
-    data: String,
-}
-
-impl Discriminant {
-    pub fn new() -> Self {
-        Self {
-            data: String::new(),
-        }
-    }
-
-    pub fn extend(&self, i: usize) -> Self {
-        let c = *Self::CHARS.get(i).expect("Too many indexes!");
-        let data = format!("{}{}", &self.data, c);
-        Self { data }
-    }
-
-    const CHARS: &[char] = &[
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
-        'i', 'j', 'k', 'l',
-    ];
-}
-
-impl Deref for Discriminant {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
 pub struct IndexingPositionEquivalence {
-    pub index: Option<(Ident, Discriminant)>,
+    // A Ricci number is just a unique integer attributed sequentially to each declared index
+    // of a Ricci lambda. Instead of storing the index name, we store this number to avoid index name clashes
+    // as the same index name can be used in different sub-lambdas.
+    pub ricci_number: usize,
     pub positions: Vec<IndexingPosition>,
 }
 
 impl IndexingPositionEquivalence {
-    pub fn new(index: Ident, discriminant: Discriminant) -> Self {
+    pub fn new(ricci_number: usize) -> Self {
         Self {
-            index: Some((index, discriminant)),
+            ricci_number,
             positions: Vec::new(),
-        }
-    }
-    pub fn from_positions(position_a: IndexingPosition, position_b: IndexingPosition) -> Self {
-        Self {
-            index: None,
-            positions: vec![position_a, position_b],
         }
     }
 }
@@ -109,5 +90,73 @@ impl IndexingPositionMapping {
             equivalences: Vec::new(),
             plain_values: HashMap::new(),
         }
+    }
+}
+
+pub struct InspectionCollector {
+    free_ricci_number: IncreasingInteger,
+    equivalences_per_index: HashMap<Ident, IndexingPositionEquivalence>,
+    mapping: IndexingPositionMapping,
+}
+
+impl InspectionCollector {
+    pub fn new() -> Self {
+        Self {
+            free_ricci_number: IncreasingInteger::new(),
+            equivalences_per_index: HashMap::new(),
+            mapping: IndexingPositionMapping::new(),
+        }
+    }
+
+    pub fn try_declare_index(&mut self, index: Ident) -> bool {
+        if self.equivalences_per_index.contains_key(&index) {
+            false
+        } else {
+            let ricci_number = self.free_ricci_number.get_next();
+            let equivalence = IndexingPositionEquivalence::new(ricci_number);
+            self.equivalences_per_index
+                .insert(index.clone(), equivalence);
+            true
+        }
+    }
+
+    pub fn try_add_position_to_existing_index(
+        &mut self,
+        index: Ident,
+        position: IndexingPosition,
+    ) -> bool {
+        if let Some(equivalence) = self.equivalences_per_index.get_mut(&index) {
+            equivalence.positions.push(position);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn save_existing_index(&mut self, index: &Ident) {
+        let equivalence = self
+            .equivalences_per_index
+            .remove(index)
+            .unwrap_or_else(|| panic!("Equivalence not found for index {}", index));
+        if !equivalence.positions.is_empty() {
+            self.mapping.equivalences.push(equivalence);
+        }
+    }
+
+    pub fn save_index_free_equivalence(&mut self, positions: Vec<IndexingPosition>) {
+        let ricci_number = self.free_ricci_number.get_next();
+        let equivalence = IndexingPositionEquivalence {
+            ricci_number,
+            positions,
+        };
+        self.mapping.equivalences.push(equivalence);
+    }
+
+    pub fn add_plain_value(&mut self, position: IndexingPosition, expr: Expr) {
+        self.mapping.plain_values.insert(position, expr);
+    }
+
+    pub fn into_mapping(self) -> IndexingPositionMapping {
+        self.mapping
     }
 }

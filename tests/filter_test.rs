@@ -8,13 +8,13 @@ fn filter_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let local_dim_for_00_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
+            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
+            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
-                global_dim_for_i,
+                dim_number_0,
                 | i | {
                     (
-                        ( 0usize .. local_dim_for_00_j ).filter( | & j | {
+                        ( 0usize .. dim_number_1 ).filter( | & j | {
                             ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor2, j ) } ) < j as i32
                         } ).map( | j | {
                             ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor1, ( i, j, ) ) } )
@@ -30,18 +30,18 @@ fn filter_lambda_format() {
     asserts::equivalent!(
         format,
         r##"{
-            let local_dim_for_00_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
-            let local_dim_for_00_k = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1;
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).0;
-            if global_dim_for_i != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).0 {
+            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).1;
+            let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1;
+            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).0;
+            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).0 {
                 panic! ("Dimensions are not matching");
             }
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
-                global_dim_for_i,
+                dim_number_0,
                 | i | {
                     (
-                        ( 0usize .. local_dim_for_00_k ).flat_map( move | k | {
-                            ( 0usize .. local_dim_for_00_j ).map( move | j | { ( j, k, ) } )
+                        ( 0usize .. dim_number_2 ).flat_map( move | k | {
+                            ( 0usize .. dim_number_1 ).map( move | j | { ( j, k, ) } )
                         } ).filter( | & ( j, k, ) | {
                             ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor3, j ) } ) < ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor4, k ) } )
                         } ).map( | ( j, k, ) | {

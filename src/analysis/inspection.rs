@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use proc_macro2::Ident;
 use syn::Error;
 
 use crate::analysis::types::{
-    Discriminant, HeadKind, IndexingPosition, IndexingPositionEquivalence, IndexingPositionMapping,
+    HeadKind, IndexingPosition, IndexingPositionMapping, InspectionCollector,
 };
 use crate::model::lambda::RicciLambda;
 use crate::model::{
@@ -54,31 +52,20 @@ fn inspect_indexers(
     rank: usize,
     kind: HeadKind,
     indexer: &RicciIndexer,
-    mapping: &mut IndexingPositionMapping,
-    equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
+    collector: &mut InspectionCollector,
 ) -> Result<(), syn::Error> {
     match indexer {
         RicciIndexer::Direct { index } => {
-            if !equivalences_per_index.contains_key(index) {
+            let position = create_position(head_name, position, rank, kind);
+            if !collector.try_add_position_to_existing_index(index.clone(), position) {
                 create_unknown_index_error(index)?;
             }
-            equivalences_per_index
-                .entry(index.clone())
-                .and_modify(|eq| {
-                    eq.positions
-                        .push(create_position(head_name, position, rank, kind))
-                });
         }
         RicciIndexer::Reverse { index } => {
-            if !equivalences_per_index.contains_key(index) {
+            let position = create_position(head_name, position, rank, kind);
+            if !collector.try_add_position_to_existing_index(index.clone(), position) {
                 create_unknown_index_error(index)?;
             }
-            equivalences_per_index
-                .entry(index.clone())
-                .and_modify(|eq| {
-                    eq.positions
-                        .push(create_position(head_name, position, rank, kind))
-                });
         }
         RicciIndexer::Reindexing {
             reindexing_name,
@@ -89,8 +76,7 @@ fn inspect_indexers(
                 name: reindexing_name.clone(),
                 content: super::types::IndexingPositionContent::IndexerResult,
             };
-            let equivalence = IndexingPositionEquivalence::from_positions(position_a, position_b);
-            mapping.equivalences.push(equivalence);
+            collector.save_index_free_equivalence(vec![position_a, position_b]);
             let rank = indexers.len();
             for (position, indexer) in indexers.iter().enumerate() {
                 inspect_indexers(
@@ -99,13 +85,12 @@ fn inspect_indexers(
                     rank,
                     HeadKind::Indexer,
                     indexer,
-                    mapping,
-                    equivalences_per_index,
+                    collector,
                 )?;
             }
         }
         RicciIndexer::Plain { expr } => {
-            mapping.plain_values.insert(
+            collector.add_plain_value(
                 create_position(head_name, position, rank, kind),
                 *expr.clone(),
             );
@@ -116,41 +101,26 @@ fn inspect_indexers(
 
 fn inspect_lambda(
     lambda: &RicciLambda,
-    discriminant: Discriminant,
-    mapping: &mut IndexingPositionMapping,
-    equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
+    collector: &mut InspectionCollector,
 ) -> Result<(), syn::Error> {
     let mut new_indexes = Vec::new();
     for index in &lambda.index_declaration.indexes {
-        if equivalences_per_index.contains_key(index) {
+        if !collector.try_declare_index(index.clone()) {
             create_duplicated_index_error(index)?;
         }
         new_indexes.push(index.clone());
-        let equivalence = IndexingPositionEquivalence::new(index.clone(), discriminant.clone());
-        equivalences_per_index.insert(index.clone(), equivalence);
     }
-    inspect_segments(
-        &lambda.body.segments,
-        discriminant,
-        mapping,
-        equivalences_per_index,
-    )?;
+    inspect_segments(&lambda.body.segments, collector)?;
     for index in new_indexes {
-        let equivalence = equivalences_per_index.remove(&index).unwrap();
-        if !equivalence.positions.is_empty() {
-            mapping.equivalences.push(equivalence);
-        }
+        collector.save_existing_index(&index);
     }
     Ok(())
 }
 
 fn inspect_segments(
     segments: &[RicciSegment],
-    discriminant: Discriminant,
-    mapping: &mut IndexingPositionMapping,
-    equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
+    collector: &mut InspectionCollector,
 ) -> Result<(), syn::Error> {
-    let mut i = 0;
     for segment in segments {
         match segment {
             RicciSegment::TensorCall {
@@ -165,25 +135,15 @@ fn inspect_segments(
                         rank,
                         HeadKind::Tensor,
                         indexer,
-                        mapping,
-                        equivalences_per_index,
+                        collector,
                     )?;
                 }
             }
             RicciSegment::SubLambda(lambda) => {
-                let new_discriminant = discriminant.extend(i);
-                i += 1;
-                inspect_lambda(lambda, new_discriminant, mapping, equivalences_per_index)?;
+                inspect_lambda(lambda, collector)?;
             }
             RicciSegment::SubGroup { group, .. } => {
-                let new_discriminant = discriminant.extend(i);
-                i += 1;
-                inspect_segments(
-                    &group.segments,
-                    new_discriminant,
-                    mapping,
-                    equivalences_per_index,
-                )?;
+                inspect_segments(&group.segments, collector)?;
             }
             RicciSegment::Token(_) => {}
         }
@@ -193,8 +153,7 @@ fn inspect_segments(
 
 fn inspect_main_group(
     group: &RicciGroup,
-    mapping: &mut IndexingPositionMapping,
-    equivalences_per_index: &mut HashMap<Ident, IndexingPositionEquivalence>,
+    collector: &mut InspectionCollector,
 ) -> Result<(), syn::Error> {
     if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
         for segment in &group.segments {
@@ -205,31 +164,19 @@ fn inspect_main_group(
                         "Macro level lambda cannot have a filter.",
                     ));
                 }
-                return inspect_lambda(
-                    lambda,
-                    Discriminant::new(),
-                    mapping,
-                    equivalences_per_index,
-                );
+                return inspect_lambda(lambda, collector);
             }
         }
         unreachable!()
     } else {
-        let discriminant = Discriminant::new();
-        inspect_segments(
-            &group.segments,
-            discriminant,
-            mapping,
-            equivalences_per_index,
-        )
+        inspect_segments(&group.segments, collector)
     }
 }
 
 pub fn inspect(group: &RicciGroup) -> Result<IndexingPositionMapping, syn::Error> {
-    let mut mapping = IndexingPositionMapping::new();
-    let mut equivalences_per_index: HashMap<Ident, IndexingPositionEquivalence> = HashMap::new();
-    inspect_main_group(group, &mut mapping, &mut equivalences_per_index)?;
-    Ok(mapping)
+    let mut collector = InspectionCollector::new();
+    inspect_main_group(group, &mut collector)?;
+    Ok(collector.into_mapping())
 }
 
 #[cfg(test)]
@@ -256,6 +203,7 @@ mod tests {
         let IndexingPositionMapping {
             equivalences,
             plain_values,
+            ..
         } = mapping;
 
         assert_eq!(0, plain_values.len());
@@ -272,6 +220,7 @@ mod tests {
         let IndexingPositionMapping {
             equivalences,
             plain_values,
+            ..
         } = mapping;
 
         assert_eq!(0, plain_values.len());

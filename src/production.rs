@@ -1,9 +1,7 @@
-use std::ops::Deref;
-
 use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
 
 use crate::analysis::types::{
-    Discriminant, IndexingPosition, IndexingPositionContent, IndexingPositionEquivalence,
+    IncreasingInteger, IndexingPosition, IndexingPositionContent, IndexingPositionEquivalence,
     IndexingPositionMapping,
 };
 use crate::model::header::RicciIndexer;
@@ -11,27 +9,27 @@ use crate::model::lambda::RicciLambda;
 use crate::model::lambda::{RicciGroup, RicciSegment};
 use crate::quote::ToTokens;
 
-fn create_global_dim_identifier(index: &Ident) -> Ident {
-    format_ident!("global_dim_for_{}", index)
+fn create_dim_identifier(ricci_number: usize) -> Ident {
+    format_ident!("dim_number_{}", ricci_number)
 }
 
-fn create_local_dim_identifier(index: &Ident, discriminant: &Discriminant) -> Ident {
-    format_ident!("local_dim_for_{}_{}", discriminant.deref(), index)
-}
-
-fn process_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut TokenStream) {
+fn process_lambda(
+    lambda: RicciLambda,
+    free_ricci_number: &mut IncreasingInteger,
+    output: &mut TokenStream,
+) {
     let mut body = TokenStream::new();
-    process_segments(lambda.body.segments, discriminant.clone(), &mut body);
+    process_segments(lambda.body.segments, free_ricci_number, &mut body);
     let indexes = lambda.index_declaration.indexes.as_slice();
 
     if indexes.len() == 1 {
         let index = &indexes[0];
-        let dimension_name = create_local_dim_identifier(index, &discriminant);
+        let dimension_name = create_dim_identifier(free_ricci_number.get_next());
 
         let lambda_stream = match lambda.filter {
             Some(filter) => {
                 let mut condition = TokenStream::new();
-                process_segments(filter.segments, discriminant.clone(), &mut condition);
+                process_segments(filter.segments, free_ricci_number, &mut condition);
                 quote! {(0usize..#dimension_name).filter(|&#index| { #condition }).map(|#index| { #body }) }
             }
             None => {
@@ -44,7 +42,8 @@ fn process_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut 
         let mut header = indexes_tuple.clone();
 
         for (i, index) in indexes.iter().enumerate() {
-            let dimension_name = create_local_dim_identifier(index, &discriminant);
+            let dimension_name = create_dim_identifier(free_ricci_number.get_next());
+
             header = if i == 0 {
                 quote! {(0usize..#dimension_name).map(move |#index| { #header })}
             } else {
@@ -54,7 +53,7 @@ fn process_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut 
         let lambda_stream = match lambda.filter {
             Some(filter) => {
                 let mut condition = TokenStream::new();
-                process_segments(filter.segments, discriminant.clone(), &mut condition);
+                process_segments(filter.segments, free_ricci_number, &mut condition);
                 quote! { #header.filter(|&#indexes_tuple| { #condition }).map(|#indexes_tuple| { #body }) }
             }
             None => {
@@ -67,23 +66,18 @@ fn process_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut 
 
 fn process_segments(
     segments: Vec<RicciSegment>,
-    discriminant: Discriminant,
+    free_ricci_number: &mut IncreasingInteger,
     output: &mut TokenStream,
 ) {
-    let mut i = 0;
     for segment in segments {
         match segment {
             RicciSegment::SubGroup { delimiter, group } => {
                 let mut content = TokenStream::new();
-                let new_discriminant = discriminant.extend(i);
-                i += 1;
-                process_segments(group.segments, new_discriminant, &mut content);
+                process_segments(group.segments, free_ricci_number, &mut content);
                 TokenTree::Group(Group::new(delimiter, content)).to_tokens(output);
             }
             RicciSegment::SubLambda(lambda) => {
-                let new_discriminant = discriminant.extend(i);
-                i += 1;
-                process_lambda(*lambda, new_discriminant, output);
+                process_lambda(*lambda, free_ricci_number, output);
             }
             RicciSegment::TensorCall {
                 tensor_name,
@@ -123,7 +117,11 @@ fn process_segments(
     }
 }
 
-fn process_main_lambda(lambda: RicciLambda, discriminant: Discriminant, output: &mut TokenStream) {
+fn process_main_lambda(
+    lambda: RicciLambda,
+    mut free_ricci_number: IncreasingInteger,
+    output: &mut TokenStream,
+) {
     if lambda.filter.is_some() {
         panic!("Macro level lambda cannot have a filter.");
     }
@@ -131,12 +129,12 @@ fn process_main_lambda(lambda: RicciLambda, discriminant: Discriminant, output: 
         .index_declaration
         .indexes
         .iter()
-        .map(create_global_dim_identifier)
+        .map(|_| create_dim_identifier(free_ricci_number.get_next()))
         .collect::<Vec<_>>();
     let indexes = lambda.index_declaration.indexes;
     let mut substream = TokenStream::new();
     let order = dimensions.len();
-    process_segments(lambda.body.segments, discriminant, &mut substream);
+    process_segments(lambda.body.segments, &mut free_ricci_number, &mut substream);
     if order == 1 {
         let dimension = &dimensions[0];
         let index = &indexes[0];
@@ -158,16 +156,17 @@ fn process_main_lambda(lambda: RicciLambda, discriminant: Discriminant, output: 
     }
 }
 
-fn process_main_group(group: RicciGroup, discriminant: Discriminant, output: &mut TokenStream) {
+fn process_main_group(group: RicciGroup, output: &mut TokenStream) {
+    let mut free_ricci_number = IncreasingInteger::new();
     if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
         for segment in group.segments {
             if let RicciSegment::SubLambda(lambda) = segment {
-                process_main_lambda(*lambda, discriminant, output);
+                process_main_lambda(*lambda, free_ricci_number, output);
                 return;
             }
         }
     } else {
-        process_segments(group.segments, discriminant, output)
+        process_segments(group.segments, &mut free_ricci_number, output)
     }
 }
 
@@ -190,45 +189,33 @@ fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
     }
 }
 
-pub fn produce_prelude(mapping: IndexingPositionMapping) -> TokenStream {
+pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenStream {
     let mut content = TokenStream::new();
-    let IndexingPositionMapping {
-        equivalences,
-        plain_values: _,
-    } = mapping;
     for equivalence in equivalences {
-        let IndexingPositionEquivalence { index, positions } = equivalence;
-        match index {
-            Some((index_name, discriminant)) => {
-                let mut maybe_dimension_var: Option<Ident> = None;
-                for position in positions.iter() {
-                    let value = produce_dimension_value(position);
-                    match &maybe_dimension_var {
-                        None => {
-                            let dimension_var = if discriminant.is_empty() {
-                                create_global_dim_identifier(&index_name)
-                            } else {
-                                create_local_dim_identifier(&index_name, &discriminant)
-                            };
-                            let definition = quote! {
-                                let #dimension_var = #value;
-                            };
-                            content.extend(definition);
-                            maybe_dimension_var = Some(dimension_var);
-                        }
-                        Some(dimension_var) => {
-                            let consistency_check = quote! {
-                                if #dimension_var != #value {
-                                    panic!("Dimensions are not matching");
-                                }
-                            };
-                            content.extend(consistency_check);
-                        }
-                    }
+        let IndexingPositionEquivalence {
+            ricci_number,
+            positions,
+        } = equivalence;
+        let mut maybe_dimension_var: Option<Ident> = None;
+        for position in positions.iter() {
+            let value = produce_dimension_value(position);
+            match &maybe_dimension_var {
+                None => {
+                    let dimension_var = create_dim_identifier(ricci_number);
+                    let definition = quote! {
+                        let #dimension_var = #value;
+                    };
+                    content.extend(definition);
+                    maybe_dimension_var = Some(dimension_var);
                 }
-            }
-            None => {
-                todo!()
+                Some(dimension_var) => {
+                    let consistency_check = quote! {
+                        if #dimension_var != #value {
+                            panic!("Dimensions are not matching");
+                        }
+                    };
+                    content.extend(consistency_check);
+                }
             }
         }
     }
@@ -236,9 +223,9 @@ pub fn produce_prelude(mapping: IndexingPositionMapping) -> TokenStream {
 }
 
 pub fn produce(group: RicciGroup, mapping: IndexingPositionMapping) -> TokenStream {
-    let mut content = produce_prelude(mapping);
-    let discriminant = Discriminant::new();
-    process_main_group(group, discriminant, &mut content);
+    let IndexingPositionMapping { equivalences, .. } = mapping;
+    let mut content = produce_prelude(equivalences);
+    process_main_group(group, &mut content);
     let mut output = TokenStream::new();
     TokenTree::Group(Group::new(Delimiter::Brace, content)).to_tokens(&mut output);
     output

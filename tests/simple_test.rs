@@ -8,9 +8,9 @@ fn simple_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor);
+            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor);
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
-                global_dim_for_i,
+                dim_number_0,
                 | i | {
                     (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, i) }) + i
                 }
@@ -23,10 +23,10 @@ fn simple_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).0;
-            let global_dim_for_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).1;
+            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).0;
+            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).1;
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
-                (global_dim_for_i, global_dim_for_j,),
+                (dim_number_0, dim_number_1, ),
                 | (i, j,) | {
                     (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, (i, j,)) })
                 }
@@ -59,18 +59,18 @@ fn layered_lambda_format() {
     asserts::equivalent!(
         format,
         r##"{
-            let local_dim_for_00_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
-            let local_dim_for_20_j = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0;
-            let global_dim_for_i = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
-            if global_dim_for_i != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 { panic! ( "Dimensions are not matching" ); }
-            if global_dim_for_i != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ) { panic! ( "Dimensions are not matching" ); }
+            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
+            let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0;
+            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
+            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 { panic! ( "Dimensions are not matching" ); }
+            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ) { panic! ( "Dimensions are not matching" ); }
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
-                global_dim_for_i,
+                dim_number_0,
                 | i | {
                     (
-                        (0usize .. local_dim_for_00_j).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor1, (i, j,)) }) })
+                        (0usize .. dim_number_1).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor1, (i, j,)) }) })
                     ).sum ::< i32 > () + (
-                        (0usize .. local_dim_for_20_j).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor2, (j, i,)) }) })
+                        (0usize .. dim_number_2).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor2, (j, i,)) }) })
                     ).sum ::< i32 > () * (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor3, i) })
                 }
             )
