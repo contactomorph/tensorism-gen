@@ -1,9 +1,9 @@
 use ndarray::{Array1, Array2};
-use tensorism_gen::{format_new_ndarray2, new_ndarray2};
+use tensorism_gen::{format_new_ndarray, new_ndarray};
 
 #[test]
 fn filter_lambda_format() {
-    let format = format_new_ndarray2!(for i => (for j if tensor2[j] < j as i32 => tensor1[i, j]).sum::<i32>() + i as i32);
+    let format = format_new_ndarray!(for i => (for j if tensor2[j] < j as i32 => tensor1[i, j]).sum::<i32>() + i as i32);
 
     asserts::equivalent!(
         format,
@@ -25,7 +25,7 @@ fn filter_lambda_format() {
         } "
     );
 
-    let format = format_new_ndarray2!(for i => (for j k if tensor3[j] < tensor4[k] => tensor1[i, j] * tensor2[i, k]).sum::<f64>());
+    let format = format_new_ndarray!(for i => (for j k if tensor3[j] < tensor4[k] => tensor1[i, j] * tensor2[i, k]).sum::<f64>());
 
     asserts::equivalent!(
         format,
@@ -58,7 +58,7 @@ fn filter_lambda_format() {
 fn filter_lambda_generation() {
     let tensor1 = Array2::<i32>::from_shape_fn((3, 5), |(i, j)| (i as i32) * (j as i32) - 7);
     let tensor2 = Array1::<i32>::from_shape_fn(5, |i| 1 - (i as i32));
-    let result = new_ndarray2!(for i => (for j if tensor2[j] < j as i32 => tensor1[i, j]).sum::<i32>() + i as i32);
+    let result = new_ndarray!(for i => (for j if tensor2[j] < j as i32 => tensor1[i, j]).sum::<i32>() + i as i32);
     let expected = Array1::<i32>::from_shape_fn(3, |i| {
         (0..5)
             .filter(|&j| tensor2[j] < j as i32)
@@ -72,7 +72,7 @@ fn filter_lambda_generation() {
     let tensor2 = Array2::<f64>::from_shape_fn((3, 2), |(i, j)| 0.5 * (j as f64) - (i as f64));
     let tensor3 = Array1::<f64>::from_shape_fn(5, |i| i as f64 - 2.0);
     let tensor4 = Array1::<f64>::from_shape_fn(2, |i| 1.0 - (i as f64));
-    let result = new_ndarray2!(for i => (for j k if tensor3[j] < tensor4[k] => tensor1[i, j] * tensor2[i, k]).sum::<f64>());
+    let result = new_ndarray!(for i => (for j k if tensor3[j] < tensor4[k] => tensor1[i, j] * tensor2[i, k]).sum::<f64>());
     let expected = Array1::<f64>::from_shape_fn(3, |i| {
         (0..2)
             .flat_map(|k| (0..5).map(move |j| (j, k)))

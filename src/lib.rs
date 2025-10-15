@@ -54,14 +54,9 @@ use proc_macro2::{Literal, TokenStream, TokenTree};
 
 mod analysis;
 mod model;
-mod parsing;
 mod production;
-mod sequentialization;
-mod types;
 
-use parsing::parse;
 use quote::ToTokens;
-use sequentialization::sequentialize;
 
 use crate::analysis::inspection::inspect;
 
@@ -77,32 +72,6 @@ fn simplify(text: &str) -> String {
 /// Macro that generate a new ndarray::Array by computing its expression.
 #[proc_macro]
 pub fn new_ndarray(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match parse(input) {
-        Err(invalid_stream) => invalid_stream.into(),
-        Ok((sequence, index_use, tensor_use)) => {
-            sequentialize(sequence, index_use, tensor_use).into()
-        }
-    }
-}
-
-#[doc(hidden)]
-#[proc_macro]
-pub fn format_new_ndarray(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match parse(input) {
-        Err(invalid_stream) => invalid_stream.into(),
-        Ok((sequence, index_use, tensor_use)) => {
-            let output = sequentialize(sequence, index_use, tensor_use);
-            let string = simplify(&output.to_string());
-            let mut output = TokenStream::new();
-            TokenTree::Literal(Literal::string(string.as_str())).to_tokens(&mut output);
-            output.into()
-        }
-    }
-}
-
-#[doc(hidden)]
-#[proc_macro]
-pub fn new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match syn::parse2::<crate::model::lambda::RicciGroup>(input.into()) {
         Err(error) => {
             let message = format!("Failed to parse input: {}", error);
@@ -120,7 +89,7 @@ pub fn new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[doc(hidden)]
 #[proc_macro]
-pub fn format_new_ndarray2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn format_new_ndarray(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match syn::parse2::<crate::model::lambda::RicciGroup>(input.into()) {
         Err(error) => {
             let message = format!("Failed to parse input: {}", error);

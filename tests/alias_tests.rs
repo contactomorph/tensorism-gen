@@ -1,8 +1,8 @@
-use tensorism_gen::format_new_ndarray2;
+use tensorism_gen::format_new_ndarray;
 
 #[test]
 fn indexing_alias_format() {
-    let format = format_new_ndarray2!(for i let j = sort[i] => tensor1[j]);
+    let format = format_new_ndarray!(for i let j = sort[i] => tensor1[j]);
 
     asserts::equivalent!(
         format,
@@ -22,7 +22,7 @@ fn indexing_alias_format() {
         } "#
     );
 
-    let format = format_new_ndarray2!(for i j let k = combine[i, j] => tensor2[i, k]);
+    let format = format_new_ndarray!(for i j let k = combine[i, j] => tensor2[i, k]);
     asserts::equivalent!(
         format,
         r#"{
@@ -46,7 +46,7 @@ fn indexing_alias_format() {
     );
 
     let format =
-        format_new_ndarray2!(for i j let k = sup[middle[sub[i, j], j]] => tensor3[k, j, i]);
+        format_new_ndarray!(for i j let k = sup[middle[sub[i, j], j]] => tensor3[k, j, i]);
     asserts::equivalent!(
         format,
         r#"{
