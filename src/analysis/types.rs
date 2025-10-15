@@ -29,7 +29,7 @@ pub enum HeadKind {
 pub enum IndexingPositionContent {
     TensorIndex(usize, usize),
     IndexerIndex(usize, usize),
-    IndexerResult,
+    IndexerResult(usize),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -45,7 +45,7 @@ impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
             return false;
         }
         match self.content {
-            IndexingPositionContent::IndexerResult => {
+            IndexingPositionContent::IndexerResult(_) => {
                 other.2 == HeadKind::Indexer && other.1 == usize::MAX
             }
             IndexingPositionContent::IndexerIndex(pos, _) => {
@@ -119,10 +119,10 @@ impl InspectionCollector {
 
     pub fn try_add_position_to_existing_index(
         &mut self,
-        index: Ident,
+        index: &Ident,
         position: IndexingPosition,
     ) -> bool {
-        if let Some(equivalence) = self.equivalences_per_index.get_mut(&index) {
+        if let Some(equivalence) = self.equivalences_per_index.get_mut(index) {
             equivalence.positions.push(position);
             true
         } else {
@@ -140,15 +140,16 @@ impl InspectionCollector {
         }
     }
 
-    pub fn save_indexing_result_equivalence(
+    pub fn save_reindexing_result_equivalence(
         &mut self,
         position: IndexingPosition,
         reindexing_name: &Ident,
+        rank: usize,
     ) {
         let ricci_number = self.free_ricci_number.get_next();
         let reindexing_position = IndexingPosition {
             name: reindexing_name.clone(),
-            content: IndexingPositionContent::IndexerResult,
+            content: IndexingPositionContent::IndexerResult(rank),
         };
         let equivalence = IndexingPositionEquivalence {
             ricci_number,

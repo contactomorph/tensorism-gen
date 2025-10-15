@@ -49,13 +49,13 @@ fn inspect_indexers(
     match indexer {
         RicciIndexer::Direct { index } => {
             let position = create_position(head_name, position, rank, kind);
-            if !collector.try_add_position_to_existing_index(index.clone(), position) {
+            if !collector.try_add_position_to_existing_index(index, position) {
                 create_unknown_index_error(index)?;
             }
         }
         RicciIndexer::Reverse { index } => {
             let position = create_position(head_name, position, rank, kind);
-            if !collector.try_add_position_to_existing_index(index.clone(), position) {
+            if !collector.try_add_position_to_existing_index(index, position) {
                 create_unknown_index_error(index)?;
             }
         }
@@ -64,7 +64,7 @@ fn inspect_indexers(
             indexers,
         } => {
             let position = create_position(head_name, position, rank, kind);
-            collector.save_indexing_result_equivalence(position, reindexing_name);
+            collector.save_reindexing_result_equivalence(position, reindexing_name, rank);
             let rank = indexers.len();
             for (position, indexer) in indexers.iter().enumerate() {
                 inspect_indexers(
@@ -95,6 +95,39 @@ fn inspect_lambda(
     for index in &lambda.index_declaration.indexes {
         if !collector.try_declare_index(index.clone()) {
             create_duplicated_index_error(index)?;
+        }
+        new_indexes.push(index.clone());
+    }
+    for declaration in &lambda.alias_declarations {
+        let index = &declaration.index;
+        if !collector.try_declare_index(index.clone()) {
+            create_duplicated_index_error(index)?;
+        }
+        match &declaration.indexer {
+            RicciIndexer::Reindexing {
+                reindexing_name,
+                indexers,
+            } => {
+                let rank = indexers.len();
+                for (position, indexer) in indexers.iter().enumerate() {
+                    inspect_indexers(
+                        reindexing_name,
+                        position,
+                        rank,
+                        HeadKind::Indexer,
+                        indexer,
+                        collector,
+                    )?;
+                }
+                let position = IndexingPosition {
+                    name: reindexing_name.clone(),
+                    content: IndexingPositionContent::IndexerResult(rank),
+                };
+                collector.try_add_position_to_existing_index(index, position);
+            }
+            _ => {
+                todo!()
+            }
         }
         new_indexes.push(index.clone());
     }

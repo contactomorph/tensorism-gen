@@ -48,7 +48,7 @@ impl Parse for RicciIndexDeclaration {
     }
 }
 
-fn parse_keyword_reindexing(keyword_token: Ident, input: ParseStream) -> Result<RicciIndexer> {
+fn parse_keyword_indexing(keyword_token: Ident, input: ParseStream) -> Result<RicciIndexer> {
     if keyword_token == "plain" {
         let expr: Box<Expr> = input.parse()?;
         Ok(RicciIndexer::Plain { expr })
@@ -58,7 +58,7 @@ fn parse_keyword_reindexing(keyword_token: Ident, input: ParseStream) -> Result<
     } else {
         Err(Error::new(
             keyword_token.span(),
-            format!("Unknown reindexing keyword: {}", keyword_token),
+            format!("Unknown indexing keyword: {}", keyword_token),
         ))
     }
 }
@@ -93,7 +93,7 @@ impl Parse for RicciIndexer {
                 })
             } else if input.peek(Token![:]) {
                 input.parse::<Token![:]>()?;
-                parse_keyword_reindexing(keyword_token, input)
+                parse_keyword_indexing(keyword_token, input)
             } else if input.peek(syn::token::Bracket) {
                 parse_external_reindexing(keyword_token, input)
             } else {
@@ -104,7 +104,7 @@ impl Parse for RicciIndexer {
         } else {
             Err(Error::new(
                 input.span(),
-                "Expected an identifier for reindexing",
+                "Expected an identifier for indexing",
             ))
         }
     }
@@ -115,12 +115,9 @@ impl Parse for RicciAliasDeclaration {
         input.parse::<Token![let]>()?;
         let index: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
-        let reindexer: RicciIndexer = input.parse()?;
+        let indexer: RicciIndexer = input.parse()?;
 
-        Ok(Self {
-            index,
-            indexer: reindexer,
-        })
+        Ok(Self { index, indexer })
     }
 }
 

@@ -1,16 +1,51 @@
-use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
-
 use crate::analysis::types::{
     IncreasingInteger, IndexingPosition, IndexingPositionContent, IndexingPositionEquivalence,
     IndexingPositionMapping,
 };
-use crate::model::header::RicciIndexer;
-use crate::model::lambda::RicciLambda;
-use crate::model::lambda::{RicciGroup, RicciSegment};
+use crate::model::header::{RicciAliasDeclaration, RicciIndexer};
+use crate::model::lambda::{RicciGroup, RicciLambda, RicciSegment};
 use crate::quote::ToTokens;
+use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
 
 fn create_dim_identifier(ricci_number: usize) -> Ident {
     format_ident!("dim_number_{}", ricci_number)
+}
+
+fn create_reindexing_type(rank: usize) -> Ident {
+    format_ident!("Reindexing{}", rank)
+}
+
+fn process_indexer(indexer: RicciIndexer) -> TokenStream {
+    match indexer {
+        RicciIndexer::Direct {
+            index: source_index,
+        } => {
+            quote! { #source_index }
+        }
+        RicciIndexer::Reindexing {
+            reindexing_name,
+            indexers,
+        } => {
+            let mut indexers_streams = Vec::<TokenStream>::new();
+            for indexer in indexers {
+                indexers_streams.push(process_indexer(indexer))
+            }
+            let reindexer_type = create_reindexing_type(indexers_streams.len());
+            quote! { crate::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* ) }
+        }
+        _ => todo!(),
+    }
+}
+
+fn process_alias_declarations(
+    alias_declarations: Vec<RicciAliasDeclaration>,
+    output: &mut TokenStream,
+) {
+    for declaration in alias_declarations {
+        let index = declaration.index;
+        let indexer = process_indexer(declaration.indexer);
+        output.extend(quote! { let #index = #indexer; });
+    }
 }
 
 fn process_lambda(
@@ -19,6 +54,7 @@ fn process_lambda(
     output: &mut TokenStream,
 ) {
     let mut body = TokenStream::new();
+    process_alias_declarations(lambda.alias_declarations, &mut body);
     process_segments(lambda.body.segments, free_ricci_number, &mut body);
     let indexes = lambda.index_declaration.indexes.as_slice();
 
@@ -91,9 +127,7 @@ fn process_segments(
                                 (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, #index) })
                             }
                         }
-                        _ => {
-                            todo!()
-                        }
+                        _ => todo!(),
                     }
                 } else {
                     let mut indexes = Vec::<syn::Ident>::new();
@@ -132,16 +166,17 @@ fn process_main_lambda(
         .map(|_| create_dim_identifier(free_ricci_number.get_next()))
         .collect::<Vec<_>>();
     let indexes = lambda.index_declaration.indexes;
-    let mut substream = TokenStream::new();
+    let mut body = TokenStream::new();
     let order = dimensions.len();
-    process_segments(lambda.body.segments, &mut free_ricci_number, &mut substream);
+    process_alias_declarations(lambda.alias_declarations, &mut body);
+    process_segments(lambda.body.segments, &mut free_ricci_number, &mut body);
     if order == 1 {
         let dimension = &dimensions[0];
         let index = &indexes[0];
         quote! {
             ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
                 #dimension,
-                |#index| { #substream }
+                |#index| { #body }
             )
         }
         .to_tokens(output);
@@ -149,7 +184,7 @@ fn process_main_lambda(
         quote! {
             ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; #order]>>::from_shape_fn(
                 (#(#dimensions),*, ),
-                |(#(#indexes),*, )| { #substream }
+                |(#(#indexes),*, )| { #body }
             )
         }
         .to_tokens(output);
@@ -171,30 +206,44 @@ fn process_main_group(group: RicciGroup, output: &mut TokenStream) {
 }
 
 fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
+    let name = &position.name;
     match position.content {
         IndexingPositionContent::TensorIndex(pos, rank) => {
-            let tensor_name = &position.name;
             let pos = Literal::usize_unsuffixed(pos);
             if rank == 1 {
                 quote! {
-                    ::ndarray::ArrayBase::<_, _>::dim(&#tensor_name)
+                    ::ndarray::ArrayBase::<_, _>::dim(&#name)
                 }
             } else {
                 quote! {
-                    ::ndarray::ArrayBase::<_, _>::dim(&#tensor_name).#pos
+                    ::ndarray::ArrayBase::<_, _>::dim(&#name).#pos
                 }
             }
         }
-        _ => {
-            todo!()
+        IndexingPositionContent::IndexerResult(rank) => {
+            let reindexer_type = create_reindexing_type(rank);
+            quote! {
+                ::crate::tensorism::#reindexer_type::get_output_bound(& #name)
+            }
+        }
+        IndexingPositionContent::IndexerIndex(pos, rank) => {
+            let reindexer_type = create_reindexing_type(rank);
+            let get_input_function = format_ident!("get_input{}_bound", pos);
+            quote! {
+                ::crate::tensorism::#reindexer_type::#get_input_function(& #name)
+            }
         }
     }
 }
 
 fn format_position(position: &IndexingPosition, index: &Ident) -> String {
     match position.content {
-        IndexingPositionContent::IndexerResult => {
-            format!("{}[…]", position.name)
+        IndexingPositionContent::IndexerResult(rank) => {
+            if 1 <= rank {
+                format!("{} = {}[{}_]", index, position.name, "_, ".repeat(rank - 1))
+            } else {
+                format!("{} = {}[]", index, position.name)
+            }
         }
         IndexingPositionContent::IndexerIndex(pos, rank) => {
             let beginning = "_, ".repeat(pos);
