@@ -3,6 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use proc_macro2::Ident;
 use syn::Expr;
 
+// A simple utility to generate increasing integers
 pub struct IncreasingInteger {
     value: usize,
 }
@@ -25,13 +26,27 @@ pub enum HeadKind {
     Indexer,
 }
 
+// Represents a position where an index is used
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum IndexingPositionContent {
+    // …[…, _, …]
+    //      ^  ^
+    //    pos  rank
     TensorIndex(usize, usize),
+    // …[…, _, …]
+    //      ^  ^
+    //    pos  rank
     IndexerIndex(usize, usize),
+    // …[…, …]
+    // ^    ^
+    //      rank
     IndexerResult(usize),
 }
 
+// Represents an occurrence of an index when calling a tensor or an indexer
+// 〈name〉[…, _, …]
+//           ^  ^
+//         pos  rank
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct IndexingPosition {
     pub name: Ident,
@@ -58,6 +73,8 @@ impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
     }
 }
 
+// Represents all occurrences of a specific index inside a Ricci lambda.
+// ∀ 〈i〉 … ▸ … 〈name1〉[…, 〈i〉, …] … 〈nameN〉[…, 〈i〉, …] … 
 pub struct IndexingPositionEquivalence {
     // A Ricci number is just a unique integer attributed sequentially to each declared index
     // of a Ricci lambda. Instead of storing the index name, we store this number to avoid index name clashes
@@ -77,8 +94,11 @@ impl IndexingPositionEquivalence {
     }
 }
 
+// All data collected from inspecting indexing positions.
 pub struct IndexingPositionMapping {
+    // List of correspondences for all indexes found
     pub equivalences: Vec<IndexingPositionEquivalence>,
+    // Plain values used as indexers: [ …, plain: 〈expr〉, …]
     pub plain_values: HashMap<IndexingPosition, Expr>,
 }
 
@@ -91,6 +111,7 @@ impl IndexingPositionMapping {
     }
 }
 
+// A temporary collector only used to collect IndexingPosition data
 pub struct InspectionCollector {
     free_ricci_number: IncreasingInteger,
     equivalences_per_index: HashMap<Ident, IndexingPositionEquivalence>,
