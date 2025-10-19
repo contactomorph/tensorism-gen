@@ -1,11 +1,38 @@
+use std::collections::HashMap;
+
 use crate::analysis::types::{
-    IncreasingInteger, IndexingPosition, IndexingPositionContent, IndexingPositionEquivalence,
-    IndexingPositionMapping,
+    AliasSource, IncreasingInteger, IndexingPosition, IndexingPositionContent,
+    IndexingPositionEquivalence, IndexingPositionMapping,
 };
 use crate::model::header::{RicciAliasDeclaration, RicciIndexer};
 use crate::model::lambda::{RicciGroup, RicciLambda, RicciSegment};
 use crate::quote::ToTokens;
 use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
+
+pub struct ProductionCollector {
+    free_ricci_number: IncreasingInteger,
+    ricci_numbers_per_index: HashMap<Ident, usize>,
+}
+
+impl ProductionCollector {
+    pub fn new() -> Self {
+        Self {
+            free_ricci_number: IncreasingInteger::new(),
+            ricci_numbers_per_index: HashMap::new(),
+        }
+    }
+
+    pub fn upsert_ricci_number(&mut self, index: &Ident) -> usize {
+        let ricci_number = self.free_ricci_number.get_next();
+        self.ricci_numbers_per_index
+            .insert(index.clone(), ricci_number);
+        ricci_number
+    }
+
+    pub fn get_ricci_number(&self, index: &Ident) -> Option<usize> {
+        self.ricci_numbers_per_index.get(index).copied()
+    }
+}
 
 fn create_dim_identifier(ricci_number: usize) -> Ident {
     format_ident!("dim_number_{}", ricci_number)
@@ -15,7 +42,7 @@ fn create_reindexing_type(rank: usize) -> Ident {
     format_ident!("Reindexing{}", rank)
 }
 
-fn process_indexer(indexer: RicciIndexer) -> TokenStream {
+fn process_indexer(indexer: RicciIndexer, collector: &ProductionCollector) -> TokenStream {
     match indexer {
         RicciIndexer::Direct {
             index: source_index,
@@ -28,10 +55,17 @@ fn process_indexer(indexer: RicciIndexer) -> TokenStream {
         } => {
             let mut indexers_streams = Vec::<TokenStream>::new();
             for indexer in indexers {
-                indexers_streams.push(process_indexer(indexer))
+                indexers_streams.push(process_indexer(indexer, collector))
             }
             let reindexer_type = create_reindexing_type(indexers_streams.len());
             quote! { crate::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* ) }
+        }
+        RicciIndexer::Reverse {
+            index: source_index,
+        } => {
+            let ricci_number = collector.get_ricci_number(&source_index).unwrap();
+            let dim = create_dim_identifier(ricci_number);
+            quote! { #dim - 1 - #source_index }
         }
         _ => todo!(),
     }
@@ -39,33 +73,35 @@ fn process_indexer(indexer: RicciIndexer) -> TokenStream {
 
 fn process_alias_declarations(
     alias_declarations: Vec<RicciAliasDeclaration>,
+    collector: &ProductionCollector,
     output: &mut TokenStream,
 ) {
     for declaration in alias_declarations {
         let index = declaration.index;
-        let indexer = process_indexer(declaration.indexer);
+        let indexer = process_indexer(declaration.indexer, collector);
         output.extend(quote! { let #index = #indexer; });
     }
 }
 
 fn process_lambda(
     lambda: RicciLambda,
-    free_ricci_number: &mut IncreasingInteger,
+    collector: &mut ProductionCollector,
     output: &mut TokenStream,
 ) {
     let mut body = TokenStream::new();
-    process_alias_declarations(lambda.alias_declarations, &mut body);
-    process_segments(lambda.body.segments, free_ricci_number, &mut body);
+    process_alias_declarations(lambda.alias_declarations, collector, &mut body);
+    process_segments(lambda.body.segments, collector, &mut body);
     let indexes = lambda.index_declaration.indexes.as_slice();
 
     if indexes.len() == 1 {
         let index = &indexes[0];
-        let dimension_name = create_dim_identifier(free_ricci_number.get_next());
+        let ricci_number = collector.upsert_ricci_number(index);
+        let dimension_name = create_dim_identifier(ricci_number);
 
         let lambda_stream = match lambda.filter {
             Some(filter) => {
                 let mut condition = TokenStream::new();
-                process_segments(filter.segments, free_ricci_number, &mut condition);
+                process_segments(filter.segments, collector, &mut condition);
                 quote! {(0usize..#dimension_name).filter(|&#index| { #condition }).map(|#index| { #body }) }
             }
             None => {
@@ -78,7 +114,8 @@ fn process_lambda(
         let mut header = indexes_tuple.clone();
 
         for (i, index) in indexes.iter().enumerate() {
-            let dimension_name = create_dim_identifier(free_ricci_number.get_next());
+            let ricci_number = collector.upsert_ricci_number(index);
+            let dimension_name = create_dim_identifier(ricci_number);
 
             header = if i == 0 {
                 quote! {(0usize..#dimension_name).map(move |#index| { #header })}
@@ -89,7 +126,7 @@ fn process_lambda(
         let lambda_stream = match lambda.filter {
             Some(filter) => {
                 let mut condition = TokenStream::new();
-                process_segments(filter.segments, free_ricci_number, &mut condition);
+                process_segments(filter.segments, collector, &mut condition);
                 quote! { #header.filter(|&#indexes_tuple| { #condition }).map(|#indexes_tuple| { #body }) }
             }
             None => {
@@ -102,18 +139,18 @@ fn process_lambda(
 
 fn process_segments(
     segments: Vec<RicciSegment>,
-    free_ricci_number: &mut IncreasingInteger,
+    collector: &mut ProductionCollector,
     output: &mut TokenStream,
 ) {
     for segment in segments {
         match segment {
             RicciSegment::SubGroup { delimiter, group } => {
                 let mut content = TokenStream::new();
-                process_segments(group.segments, free_ricci_number, &mut content);
+                process_segments(group.segments, collector, &mut content);
                 TokenTree::Group(Group::new(delimiter, content)).to_tokens(output);
             }
             RicciSegment::SubLambda(lambda) => {
-                process_lambda(*lambda, free_ricci_number, output);
+                process_lambda(*lambda, collector, output);
             }
             RicciSegment::TensorCall {
                 tensor_name,
@@ -121,25 +158,17 @@ fn process_segments(
             } => {
                 let stream = if indexers.len() == 1 {
                     let indexer = indexers.into_iter().next().unwrap();
-                    match indexer {
-                        RicciIndexer::Direct { index } => {
-                            quote! {
-                                (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, #index) })
-                            }
-                        }
-                        _ => todo!(),
+                    let indexer_stream = process_indexer(indexer, collector);
+                    quote! {
+                        (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, #indexer_stream) })
                     }
                 } else {
-                    let mut indexes = Vec::<syn::Ident>::new();
+                    let mut indexer_streams = Vec::<TokenStream>::new();
                     for indexer in indexers.into_iter() {
-                        match indexer {
-                            RicciIndexer::Direct { index } => indexes.push(index),
-                            _ => todo!(),
-                        };
+                        indexer_streams.push(process_indexer(indexer, collector));
                     }
-
                     quote! {
-                        (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, (#(#indexes, )*)) })
+                        (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, (#(#indexer_streams, )*)) })
                     }
                 };
                 output.extend(stream);
@@ -153,7 +182,7 @@ fn process_segments(
 
 fn process_main_lambda(
     lambda: RicciLambda,
-    mut free_ricci_number: IncreasingInteger,
+    collector: &mut ProductionCollector,
     output: &mut TokenStream,
 ) {
     if lambda.filter.is_some() {
@@ -163,13 +192,13 @@ fn process_main_lambda(
         .index_declaration
         .indexes
         .iter()
-        .map(|_| create_dim_identifier(free_ricci_number.get_next()))
+        .map(|ident| create_dim_identifier(collector.upsert_ricci_number(ident)))
         .collect::<Vec<_>>();
     let indexes = lambda.index_declaration.indexes;
     let mut body = TokenStream::new();
     let order = dimensions.len();
-    process_alias_declarations(lambda.alias_declarations, &mut body);
-    process_segments(lambda.body.segments, &mut free_ricci_number, &mut body);
+    process_alias_declarations(lambda.alias_declarations, collector, &mut body);
+    process_segments(lambda.body.segments, collector, &mut body);
     if order == 1 {
         let dimension = &dimensions[0];
         let index = &indexes[0];
@@ -192,16 +221,16 @@ fn process_main_lambda(
 }
 
 fn process_main_group(group: RicciGroup, output: &mut TokenStream) {
-    let mut free_ricci_number = IncreasingInteger::new();
+    let mut collector = ProductionCollector::new();
     if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
         for segment in group.segments {
             if let RicciSegment::SubLambda(lambda) = segment {
-                process_main_lambda(*lambda, free_ricci_number, output);
+                process_main_lambda(*lambda, &mut collector, output);
                 return;
             }
         }
     } else {
-        process_segments(group.segments, &mut free_ricci_number, output)
+        process_segments(group.segments, &mut collector, output)
     }
 }
 
@@ -236,14 +265,43 @@ fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
     }
 }
 
+fn produce_dimension_value_for_alias(alias_source: &AliasSource) -> TokenStream {
+    match alias_source {
+        AliasSource::FromReindexing {
+            reindexing_name,
+            rank,
+        } => {
+            let reindexer_type = create_reindexing_type(*rank);
+            quote! {
+                ::crate::tensorism::#reindexer_type::get_output_bound(& #reindexing_name)
+            }
+        }
+        AliasSource::FromIndex { ricci_number } => {
+            let dimension = create_dim_identifier(*ricci_number);
+            quote! {
+                #dimension
+            }
+        }
+    }
+}
+
+fn format_indexer_result(reindexing_name: &Ident, index: &Ident, rank: usize) -> String {
+    if 1 <= rank {
+        format!(
+            "{} = {}[{}_]",
+            index,
+            reindexing_name,
+            "_, ".repeat(rank - 1)
+        )
+    } else {
+        format!("{} = {}[]", index, reindexing_name)
+    }
+}
+
 fn format_position(position: &IndexingPosition, index: &Ident) -> String {
     match position.content {
         IndexingPositionContent::IndexerResult(rank) => {
-            if 1 <= rank {
-                format!("{} = {}[{}_]", index, position.name, "_, ".repeat(rank - 1))
-            } else {
-                format!("{} = {}[]", index, position.name)
-            }
+            format_indexer_result(&position.name, index, rank)
         }
         IndexingPositionContent::IndexerIndex(pos, rank) => {
             let beginning = "_, ".repeat(pos);
@@ -266,15 +324,38 @@ fn format_position(position: &IndexingPosition, index: &Ident) -> String {
     }
 }
 
+fn format_alias_source(alias_source: &AliasSource, alias: &Ident) -> String {
+    match alias_source {
+        AliasSource::FromReindexing {
+            reindexing_name,
+            rank,
+        } => format_indexer_result(reindexing_name, alias, *rank),
+        AliasSource::FromIndex { .. } => {
+            format!("{} = _", alias)
+        }
+    }
+}
+
 pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenStream {
     let mut content = TokenStream::new();
     for equivalence in equivalences {
         let IndexingPositionEquivalence {
             ricci_number,
+            alias_source,
             positions,
             index,
         } = equivalence;
         let mut maybe_dimension_var: Option<(Ident, String)> = None;
+        if let Some(alias_source) = alias_source {
+            let value = produce_dimension_value_for_alias(&alias_source);
+            let position = format_alias_source(&alias_source, &index);
+            let dimension_var = create_dim_identifier(ricci_number);
+            let definition = quote! {
+                let #dimension_var = #value;
+            };
+            content.extend(definition);
+            maybe_dimension_var = Some((dimension_var, position));
+        }
         for position in positions.iter() {
             let value = produce_dimension_value(position);
             let position = format_position(position, &index);

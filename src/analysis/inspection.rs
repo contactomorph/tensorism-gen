@@ -2,9 +2,10 @@ use proc_macro2::Ident;
 use syn::Error;
 
 use crate::analysis::types::{
-    HeadKind, IndexingPosition, IndexingPositionContent, IndexingPositionMapping,
+    AliasSource, HeadKind, IndexingPosition, IndexingPositionContent, IndexingPositionMapping,
     InspectionCollector,
 };
+use crate::model::header::RicciAliasDeclaration;
 use crate::model::lambda::RicciLambda;
 use crate::model::{
     header::RicciIndexer,
@@ -38,7 +39,7 @@ fn create_position(name: &Ident, position: usize, rank: usize, kind: HeadKind) -
     }
 }
 
-fn inspect_indexers(
+fn inspect_indexer(
     head_name: &Ident,
     position: usize,
     rank: usize,
@@ -64,15 +65,15 @@ fn inspect_indexers(
             indexers,
         } => {
             let position = create_position(head_name, position, rank, kind);
-            collector.save_reindexing_result_equivalence(position, reindexing_name, rank);
-            let rank = indexers.len();
-            for (position, indexer) in indexers.iter().enumerate() {
-                inspect_indexers(
+            let inner_rank = indexers.len();
+            collector.save_reindexing_result_equivalence(position, reindexing_name, inner_rank);
+            for (inner_position, inner_indexer) in indexers.iter().enumerate() {
+                inspect_indexer(
                     reindexing_name,
-                    position,
-                    rank,
+                    inner_position,
+                    inner_rank,
                     HeadKind::Indexer,
-                    indexer,
+                    inner_indexer,
                     collector,
                 )?;
             }
@@ -83,6 +84,54 @@ fn inspect_indexers(
                 *expr.clone(),
             );
         }
+    }
+    Ok(())
+}
+
+fn inspect_alias_declaration(
+    declaration: &RicciAliasDeclaration,
+    collector: &mut InspectionCollector,
+) -> Result<(), syn::Error> {
+    let alias = &declaration.index;
+    let alias_source = match &declaration.indexer {
+        RicciIndexer::Reindexing {
+            reindexing_name,
+            indexers,
+        } => {
+            let rank = indexers.len();
+            for (position, indexer) in indexers.iter().enumerate() {
+                inspect_indexer(
+                    reindexing_name,
+                    position,
+                    rank,
+                    HeadKind::Indexer,
+                    indexer,
+                    collector,
+                )?;
+            }
+            AliasSource::FromReindexing {
+                reindexing_name: reindexing_name.clone(),
+                rank,
+            }
+        }
+        RicciIndexer::Direct { index } => {
+            let Some(ricci_number) = collector.try_get_ricci_number(index) else {
+                return create_unknown_index_error(index);
+            };
+            AliasSource::FromIndex { ricci_number }
+        }
+        RicciIndexer::Reverse { index } => {
+            let Some(ricci_number) = collector.try_get_ricci_number(index) else {
+                return create_unknown_index_error(index);
+            };
+            AliasSource::FromIndex { ricci_number }
+        }
+        _ => {
+            todo!()
+        }
+    };
+    if !collector.try_declare_alias(alias.clone(), alias_source) {
+        create_duplicated_index_error(alias)?;
     }
     Ok(())
 }
@@ -99,37 +148,8 @@ fn inspect_lambda(
         new_indexes.push(index.clone());
     }
     for declaration in &lambda.alias_declarations {
-        let index = &declaration.index;
-        if !collector.try_declare_index(index.clone()) {
-            create_duplicated_index_error(index)?;
-        }
-        match &declaration.indexer {
-            RicciIndexer::Reindexing {
-                reindexing_name,
-                indexers,
-            } => {
-                let rank = indexers.len();
-                for (position, indexer) in indexers.iter().enumerate() {
-                    inspect_indexers(
-                        reindexing_name,
-                        position,
-                        rank,
-                        HeadKind::Indexer,
-                        indexer,
-                        collector,
-                    )?;
-                }
-                let position = IndexingPosition {
-                    name: reindexing_name.clone(),
-                    content: IndexingPositionContent::IndexerResult(rank),
-                };
-                collector.try_add_position_to_existing_index(index, position);
-            }
-            _ => {
-                todo!()
-            }
-        }
-        new_indexes.push(index.clone());
+        inspect_alias_declaration(declaration, collector)?;
+        new_indexes.push(declaration.index.clone());
     }
     inspect_segments(&lambda.body.segments, collector)?;
     for index in new_indexes {
@@ -150,7 +170,7 @@ fn inspect_segments(
             } => {
                 let rank = indexers.len();
                 for (position, indexer) in indexers.iter().enumerate() {
-                    inspect_indexers(
+                    inspect_indexer(
                         tensor_name,
                         position,
                         rank,

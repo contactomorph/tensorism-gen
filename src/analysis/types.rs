@@ -73,14 +73,21 @@ impl PartialEq<(&str, usize, HeadKind)> for IndexingPosition {
     }
 }
 
+pub enum AliasSource {
+    FromIndex { ricci_number: usize },
+    FromReindexing { reindexing_name: Ident, rank: usize },
+}
+
 // Represents all occurrences of a specific index inside a Ricci lambda.
-// ∀ 〈i〉 … ▸ … 〈name1〉[…, 〈i〉, …] … 〈nameN〉[…, 〈i〉, …] … 
+// ∀ 〈i〉 … ∙ … ≔ 〈reindexingA〉 ⦇ …, 〈i〉, … ⦈ … ▸ … 〈name1〉 ⟦ …, 〈i〉, … ⟧ … 〈nameN〉 ⟦ …, 〈i〉, … ⟧ …
+// … ∙ 〈i〉 ≔ … ▸ … 〈name1〉 ⟦ …, 〈i〉, … ⟧ … 〈nameN〉 ⟦ …, 〈i〉, … ⟧ …
 pub struct IndexingPositionEquivalence {
     // A Ricci number is just a unique integer attributed sequentially to each declared index
     // of a Ricci lambda. Instead of storing the index name, we store this number to avoid index name clashes
     // as the same index name can be used in different sub-lambdas.
     pub ricci_number: usize,
     pub index: Ident,
+    pub alias_source: Option<AliasSource>,
     pub positions: Vec<IndexingPosition>,
 }
 
@@ -89,6 +96,19 @@ impl IndexingPositionEquivalence {
         Self {
             ricci_number,
             index,
+            alias_source: None,
+            positions: Vec::new(),
+        }
+    }
+    pub fn new_alias_declaration(
+        ricci_number: usize,
+        index: Ident,
+        alias_source: AliasSource,
+    ) -> Self {
+        Self {
+            ricci_number,
+            index,
+            alias_source: Some(alias_source),
             positions: Vec::new(),
         }
     }
@@ -127,10 +147,31 @@ impl InspectionCollector {
         }
     }
 
+    pub fn try_get_ricci_number(&self, index: &Ident) -> Option<usize> {
+        self.equivalences_per_index
+            .get(index)
+            .map(|equivalence| equivalence.ricci_number)
+    }
+
     pub fn try_declare_index(&mut self, index: Ident) -> bool {
         if let Entry::Vacant(entry) = self.equivalences_per_index.entry(index.clone()) {
             let ricci_number = self.free_ricci_number.get_next();
             let equivalence = IndexingPositionEquivalence::new(ricci_number, index);
+            entry.insert(equivalence);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn try_declare_alias(&mut self, index: Ident, alias_source: AliasSource) -> bool {
+        if let Entry::Vacant(entry) = self.equivalences_per_index.entry(index.clone()) {
+            let ricci_number = self.free_ricci_number.get_next();
+            let equivalence = IndexingPositionEquivalence::new_alias_declaration(
+                ricci_number,
+                index,
+                alias_source,
+            );
             entry.insert(equivalence);
             true
         } else {
@@ -175,6 +216,7 @@ impl InspectionCollector {
         let equivalence = IndexingPositionEquivalence {
             ricci_number,
             index: reindexing_name.clone(),
+            alias_source: None,
             positions: vec![position, reindexing_position],
         };
         self.mapping.equivalences.push(equivalence);
