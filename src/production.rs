@@ -252,14 +252,14 @@ fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
         IndexingPositionContent::IndexerResult(rank) => {
             let reindexer_type = create_reindexing_type(rank);
             quote! {
-                ::crate::tensorism::#reindexer_type::get_output_bound(& #name)
+                crate::tensorism::#reindexer_type::get_output_bound(& #name)
             }
         }
         IndexingPositionContent::IndexerIndex(pos, rank) => {
             let reindexer_type = create_reindexing_type(rank);
             let get_input_function = format_ident!("get_input{}_bound", pos);
             quote! {
-                ::crate::tensorism::#reindexer_type::#get_input_function(& #name)
+                crate::tensorism::#reindexer_type::#get_input_function(& #name)
             }
         }
     }
@@ -273,7 +273,7 @@ fn produce_dimension_value_for_alias(alias_source: &AliasSource) -> TokenStream 
         } => {
             let reindexer_type = create_reindexing_type(*rank);
             quote! {
-                ::crate::tensorism::#reindexer_type::get_output_bound(& #reindexing_name)
+                crate::tensorism::#reindexer_type::get_output_bound(& #reindexing_name)
             }
         }
         AliasSource::FromIndex { ricci_number } => {

@@ -8,8 +8,8 @@ fn indexing_alias_format() {
     asserts::equivalent!(
         format,
         r#"{
-            let dim_number_0 = :: crate :: tensorism :: Reindexing1 :: get_input0_bound( & sort );
-            let dim_number_1 = :: crate :: tensorism :: Reindexing1 :: get_output_bound( & sort );
+            let dim_number_0 = crate :: tensorism :: Reindexing1 :: get_input0_bound( & sort );
+            let dim_number_1 = crate :: tensorism :: Reindexing1 :: get_output_bound( & sort );
             if dim_number_1 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ) {
                 panic! ( "Dimensions are not matching between j = sort[ _ ] and tensor1[ j ]" );
             }
@@ -27,12 +27,12 @@ fn indexing_alias_format() {
     asserts::equivalent!(
         format,
         r#"{
-            let dim_number_0 = :: crate :: tensorism :: Reindexing2 :: get_input0_bound( & combine );
+            let dim_number_0 = crate :: tensorism :: Reindexing2 :: get_input0_bound( & combine );
             if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).0 {
                 panic! ( "Dimensions are not matching between combine[ i, _ ] and tensor2[ i, _ ]" );
             }
-            let dim_number_1 = :: crate :: tensorism :: Reindexing2 :: get_input1_bound( & combine );
-            let dim_number_2 = :: crate :: tensorism :: Reindexing2 :: get_output_bound( & combine );
+            let dim_number_1 = crate :: tensorism :: Reindexing2 :: get_input1_bound( & combine );
+            let dim_number_2 = crate :: tensorism :: Reindexing2 :: get_output_bound( & combine );
             if dim_number_2 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 {
                 panic! ( "Dimensions are not matching between k = combine[ _, _ ] and tensor2[ _, k ]" );
             }
@@ -50,26 +50,26 @@ fn indexing_alias_format() {
     asserts::equivalent!(
         format,
         r#"{
-            let dim_number_2 = :: crate :: tensorism :: Reindexing1 :: get_input0_bound( & sup );
-            if dim_number_2 != :: crate :: tensorism :: Reindexing2 :: get_output_bound( & middle ) {
+            let dim_number_2 = crate :: tensorism :: Reindexing1 :: get_input0_bound( & sup );
+            if dim_number_2 != crate :: tensorism :: Reindexing2 :: get_output_bound( & middle ) {
                 panic! ( "Dimensions are not matching between sup[ middle ] and middle = middle[ _, _ ]" );
             }
-            let dim_number_3 = :: crate :: tensorism :: Reindexing2 :: get_input0_bound( & middle );
-            if dim_number_3 != :: crate :: tensorism :: Reindexing2 :: get_output_bound( & sub ) {
+            let dim_number_3 = crate :: tensorism :: Reindexing2 :: get_input0_bound( & middle );
+            if dim_number_3 != crate :: tensorism :: Reindexing2 :: get_output_bound( & sub ) {
                 panic! ( "Dimensions are not matching between middle[ sub, _ ] and sub = sub[ _, _ ]" );
             }
-            let dim_number_0 = :: crate :: tensorism :: Reindexing2 :: get_input0_bound( & sub );
+            let dim_number_0 = crate :: tensorism :: Reindexing2 :: get_input0_bound( & sub );
             if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ).2 {
                 panic! ( "Dimensions are not matching between sub[ i, _ ] and tensor3[ _, _, i ]" );
             }
-            let dim_number_1 = :: crate :: tensorism :: Reindexing2 :: get_input1_bound( & sub );
-            if dim_number_1 != :: crate :: tensorism :: Reindexing2 :: get_input1_bound( & middle ) {
+            let dim_number_1 = crate :: tensorism :: Reindexing2 :: get_input1_bound( & sub );
+            if dim_number_1 != crate :: tensorism :: Reindexing2 :: get_input1_bound( & middle ) {
                 panic! ( "Dimensions are not matching between sub[ _, j ] and middle[ _, j ]" );
             }
             if dim_number_1 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ).1 {
                 panic! ( "Dimensions are not matching between sub[ _, j ] and tensor3[ _, j, _ ]" );
             }
-            let dim_number_4 = :: crate :: tensorism :: Reindexing1 :: get_output_bound( & sup );
+            let dim_number_4 = crate :: tensorism :: Reindexing1 :: get_output_bound( & sup );
             if dim_number_4 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ).0 {
                 panic! ( "Dimensions are not matching between k = sup[ _ ] and tensor3[ k, _, _ ]" );
             }
@@ -95,23 +95,23 @@ fn indexing_alias_format() {
         format,
         r#"{
             let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ).0;
-            if dim_number_2 != :: crate :: tensorism :: Reindexing1 :: get_output_bound( & sup ) {
+            if dim_number_2 != crate :: tensorism :: Reindexing1 :: get_output_bound( & sup ) {
                 panic! ( "Dimensions are not matching between tensor3[ sup, _, _ ] and sup = sup[ _ ]" );
             }
-            let dim_number_3 = :: crate :: tensorism :: Reindexing1 :: get_input0_bound( & sup );
-            if dim_number_3 != :: crate :: tensorism :: Reindexing2 :: get_output_bound( & middle ) {
+            let dim_number_3 = crate :: tensorism :: Reindexing1 :: get_input0_bound( & sup );
+            if dim_number_3 != crate :: tensorism :: Reindexing2 :: get_output_bound( & middle ) {
                 panic! ( "Dimensions are not matching between sup[ middle ] and middle = middle[ _, _ ]" );
             }
-            let dim_number_4 = :: crate :: tensorism :: Reindexing2 :: get_input0_bound( & middle );
-            if dim_number_4 != :: crate :: tensorism :: Reindexing2 :: get_output_bound( & sub ) {
+            let dim_number_4 = crate :: tensorism :: Reindexing2 :: get_input0_bound( & middle );
+            if dim_number_4 != crate :: tensorism :: Reindexing2 :: get_output_bound( & sub ) {
                 panic! ( "Dimensions are not matching between middle[ sub, _ ] and sub = sub[ _, _ ]" );
             }
-            let dim_number_0 = :: crate :: tensorism :: Reindexing2 :: get_input0_bound( & sub );
+            let dim_number_0 = crate :: tensorism :: Reindexing2 :: get_input0_bound( & sub );
             if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ).2 {
                 panic! ( "Dimensions are not matching between sub[ i, _ ] and tensor3[ _, _, i ]" );
             }
-            let dim_number_1 = :: crate :: tensorism :: Reindexing2 :: get_input1_bound( & sub );
-            if dim_number_1 != :: crate :: tensorism :: Reindexing2 :: get_input1_bound( & middle ) {
+            let dim_number_1 = crate :: tensorism :: Reindexing2 :: get_input1_bound( & sub );
+            if dim_number_1 != crate :: tensorism :: Reindexing2 :: get_input1_bound( & middle ) {
                 panic! ( "Dimensions are not matching between sub[ _, j ] and middle[ _, j ]" );
             }
             if dim_number_1 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ).1 {
