@@ -27,13 +27,13 @@ fn plain_value_lambda_format() {
         format,
         r#"{
             let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).0;
-            if dim_number_2 != crate :: tensorism :: Reindexing2 :: get_output_bound( & indexer ) {
+            if dim_number_2 != :: tensorism :: Reindexing2 :: get_output_bound( & indexer ) {
                 panic! ( "Dimensions are not matching between tensor1[ indexer, _, _ ] and indexer = indexer[ _, _ ]" );
             }
             let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).1;
-            let dim_number_1 = crate :: tensorism :: Reindexing2 :: get_input1_bound( & indexer );
+            let dim_number_1 = :: tensorism :: Reindexing2 :: get_input1_bound( & indexer );
             let plain_value_0 : usize = 3 * n - 2;
-            if plain_value_0 >= crate :: tensorism :: Reindexing2 :: get_input0_bound( & indexer ) {
+            if plain_value_0 >= :: tensorism :: Reindexing2 :: get_input0_bound( & indexer ) {
                 panic! ( "Plain value is out of bounds in indexer[ plain, _ ]" );
             }
             let plain_value_1 : usize = 2 * n + 1;
@@ -45,7 +45,7 @@ fn plain_value_lambda_format() {
                 | ( i, j, ) | {
                     ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor1,
                         (
-                            crate :: tensorism :: Reindexing2 :: get_unchecked( & indexer, plain_value_0, j ),
+                            :: tensorism :: Reindexing2 :: get_unchecked( & indexer, plain_value_0, j ),
                             i,
                             plain_value_1,
                         )
