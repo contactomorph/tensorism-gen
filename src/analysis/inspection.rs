@@ -36,6 +36,27 @@ fn create_forbidden_alias_error(alias: &Ident) -> Result<(), syn::Error> {
     ))
 }
 
+fn create_lonely_indexes_error(indexes: Vec<Ident>) -> Result<(), syn::Error> {
+    if indexes.len() == 1 {
+        let first = &indexes[0];
+        Err(syn::Error::new_spanned(
+            first,
+            format!("'{}' is never used as an index", first),
+        ))
+    } else {
+        let indexes_string = indexes
+            .iter()
+            .map(|i| format!("'{}'", i))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let first = &indexes[0];
+        Err(syn::Error::new_spanned(
+            first,
+            format!("{} are never used as indexes", indexes_string),
+        ))
+    }
+}
+
 fn create_position(name: &Ident, position: usize, rank: usize, kind: HeadKind) -> IndexingPosition {
     match kind {
         HeadKind::Indexer => IndexingPosition {
@@ -162,8 +183,14 @@ fn inspect_lambda(
         new_indexes.push(declaration.index.clone());
     }
     inspect_segments(&lambda.body.segments, collector)?;
+    let mut lonely_indexes = Vec::<Ident>::new();
     for index in new_indexes {
-        collector.save_existing_index(&index);
+        if !collector.save_existing_index(&index) {
+            lonely_indexes.push(index);
+        }
+    }
+    if !lonely_indexes.is_empty() {
+        return create_lonely_indexes_error(lonely_indexes);
     }
     Ok(())
 }
@@ -227,7 +254,8 @@ fn inspect_main_group(
 pub fn inspect(group: &RicciGroup) -> Result<IndexingPositionMapping, syn::Error> {
     let mut collector = InspectionCollector::new();
     inspect_main_group(group, &mut collector)?;
-    Ok(collector.into_mapping())
+    let mapping = collector.into_mapping();
+    Ok(mapping)
 }
 
 #[cfg(test)]

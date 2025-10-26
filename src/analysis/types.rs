@@ -210,13 +210,16 @@ impl InspectionCollector {
         self.mapping.plain_values.push(plain_value);
     }
 
-    pub fn save_existing_index(&mut self, index: &Ident) {
+    pub fn save_existing_index(&mut self, index: &Ident) -> bool {
         let equivalence = self
             .equivalences_per_index
             .remove(index)
             .unwrap_or_else(|| panic!("Equivalence not found for index {}", index));
         if !equivalence.positions.is_empty() {
             self.mapping.equivalences.push(equivalence);
+            true
+        } else {
+            false
         }
     }
 
