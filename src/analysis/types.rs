@@ -114,19 +114,25 @@ impl IndexingPositionEquivalence {
     }
 }
 
+pub struct PositionalPlainValue {
+    pub plain_number: usize,
+    pub position: IndexingPosition,
+    pub expr: Expr,
+}
+
 // All data collected from inspecting indexing positions.
 pub struct IndexingPositionMapping {
     // List of correspondences for all indexes found
     pub equivalences: Vec<IndexingPositionEquivalence>,
     // Plain values used as indexers: [ …, plain: 〈expr〉, …]
-    pub plain_values: HashMap<IndexingPosition, Expr>,
+    pub plain_values: Vec<PositionalPlainValue>,
 }
 
 impl IndexingPositionMapping {
     pub fn new() -> Self {
         Self {
             equivalences: Vec::new(),
-            plain_values: HashMap::new(),
+            plain_values: Vec::new(),
         }
     }
 }
@@ -134,6 +140,7 @@ impl IndexingPositionMapping {
 // A temporary collector only used to collect IndexingPosition data
 pub struct InspectionCollector {
     free_ricci_number: IncreasingInteger,
+    free_plain_number: IncreasingInteger,
     equivalences_per_index: HashMap<Ident, IndexingPositionEquivalence>,
     mapping: IndexingPositionMapping,
 }
@@ -142,6 +149,7 @@ impl InspectionCollector {
     pub fn new() -> Self {
         Self {
             free_ricci_number: IncreasingInteger::new(),
+            free_plain_number: IncreasingInteger::new(),
             equivalences_per_index: HashMap::new(),
             mapping: IndexingPositionMapping::new(),
         }
@@ -192,6 +200,16 @@ impl InspectionCollector {
         }
     }
 
+    pub fn add_plain_value(&mut self, position: IndexingPosition, expr: Expr) {
+        let plain_number = self.free_plain_number.get_next();
+        let plain_value = PositionalPlainValue {
+            position,
+            expr,
+            plain_number,
+        };
+        self.mapping.plain_values.push(plain_value);
+    }
+
     pub fn save_existing_index(&mut self, index: &Ident) {
         let equivalence = self
             .equivalences_per_index
@@ -220,10 +238,6 @@ impl InspectionCollector {
             positions: vec![position, reindexing_position],
         };
         self.mapping.equivalences.push(equivalence);
-    }
-
-    pub fn add_plain_value(&mut self, position: IndexingPosition, expr: Expr) {
-        self.mapping.plain_values.insert(position, expr);
     }
 
     pub fn into_mapping(self) -> IndexingPositionMapping {

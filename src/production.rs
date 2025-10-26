@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::analysis::types::{
     AliasSource, IncreasingInteger, IndexingPosition, IndexingPositionContent,
-    IndexingPositionEquivalence, IndexingPositionMapping,
+    IndexingPositionEquivalence, IndexingPositionMapping, PositionalPlainValue,
 };
 use crate::model::header::{RicciAliasDeclaration, RicciIndexer};
 use crate::model::lambda::{RicciGroup, RicciLambda, RicciSegment};
@@ -11,6 +11,7 @@ use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
 
 pub struct ProductionCollector {
     free_ricci_number: IncreasingInteger,
+    free_plain_number: IncreasingInteger,
     ricci_numbers_per_index: HashMap<Ident, usize>,
 }
 
@@ -18,6 +19,7 @@ impl ProductionCollector {
     pub fn new() -> Self {
         Self {
             free_ricci_number: IncreasingInteger::new(),
+            free_plain_number: IncreasingInteger::new(),
             ricci_numbers_per_index: HashMap::new(),
         }
     }
@@ -32,17 +34,24 @@ impl ProductionCollector {
     pub fn get_ricci_number(&self, index: &Ident) -> Option<usize> {
         self.ricci_numbers_per_index.get(index).copied()
     }
+    pub fn upsert_plain_number(&mut self) -> usize {
+        self.free_plain_number.get_next()
+    }
 }
 
 fn create_dim_identifier(ricci_number: usize) -> Ident {
     format_ident!("dim_number_{}", ricci_number)
 }
 
+fn create_plain_identifier(plain_number: usize) -> Ident {
+    format_ident!("plain_value_{}", plain_number)
+}
+
 fn create_reindexing_type(rank: usize) -> Ident {
     format_ident!("Reindexing{}", rank)
 }
 
-fn process_indexer(indexer: RicciIndexer, collector: &ProductionCollector) -> TokenStream {
+fn process_indexer(indexer: RicciIndexer, collector: &mut ProductionCollector) -> TokenStream {
     match indexer {
         RicciIndexer::Direct {
             index: source_index,
@@ -67,13 +76,34 @@ fn process_indexer(indexer: RicciIndexer, collector: &ProductionCollector) -> To
             let dim = create_dim_identifier(ricci_number);
             quote! { #dim - 1 - #source_index }
         }
-        _ => todo!(),
+        RicciIndexer::Plain { .. } => {
+            let plain_number = collector.upsert_plain_number();
+            let plain = create_plain_identifier(plain_number);
+            quote! { #plain }
+        }
+    }
+}
+
+fn process_plain_values(plain_values: Vec<PositionalPlainValue>, output: &mut TokenStream) {
+    for plain_value in plain_values {
+        let plain = create_plain_identifier(plain_value.plain_number);
+        let expr = plain_value.expr;
+        let value = produce_dimension_value(&plain_value.position);
+        let index = Ident::new("plain", proc_macro2::Span::call_site());
+        let position = format_position(&plain_value.position, &index);
+        let message = format!("Plain value is out of bounds in {}", position);
+        output.extend(quote! {
+            let #plain: usize = #expr;
+            if #plain >= #value {
+                panic!(#message);
+            }
+        });
     }
 }
 
 fn process_alias_declarations(
     alias_declarations: Vec<RicciAliasDeclaration>,
-    collector: &ProductionCollector,
+    collector: &mut ProductionCollector,
     output: &mut TokenStream,
 ) {
     for declaration in alias_declarations {
@@ -388,8 +418,12 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenS
 }
 
 pub fn produce(group: RicciGroup, mapping: IndexingPositionMapping) -> TokenStream {
-    let IndexingPositionMapping { equivalences, .. } = mapping;
+    let IndexingPositionMapping {
+        equivalences,
+        plain_values,
+    } = mapping;
     let mut content = produce_prelude(equivalences);
+    process_plain_values(plain_values, &mut content);
     process_main_group(group, &mut content);
     let mut output = TokenStream::new();
     TokenTree::Group(Group::new(Delimiter::Brace, content)).to_tokens(&mut output);

@@ -26,6 +26,16 @@ fn create_duplicated_index_error(index: &Ident) -> Result<(), syn::Error> {
     ))
 }
 
+fn create_forbidden_alias_error(alias: &Ident) -> Result<(), syn::Error> {
+    Err(syn::Error::new_spanned(
+        alias,
+        format!(
+            "Alias '{}' cannot be defined from a plain expression",
+            alias
+        ),
+    ))
+}
+
 fn create_position(name: &Ident, position: usize, rank: usize, kind: HeadKind) -> IndexingPosition {
     match kind {
         HeadKind::Indexer => IndexingPosition {
@@ -126,8 +136,8 @@ fn inspect_alias_declaration(
             };
             AliasSource::FromIndex { ricci_number }
         }
-        _ => {
-            todo!()
+        RicciIndexer::Plain { .. } => {
+            return create_forbidden_alias_error(alias);
         }
     };
     if !collector.try_declare_alias(alias.clone(), alias_source) {
