@@ -51,7 +51,7 @@ fn create_reindexing_type(rank: usize) -> Ident {
     format_ident!("Reindexing{}", rank)
 }
 
-fn process_indexer(indexer: RicciIndexer, collector: &mut ProductionCollector) -> TokenStream {
+fn process_indexer(indexer: RicciIndexer, collector: &mut ProductionCollector, already_wrapped_by_unsafe: bool) -> TokenStream {
     match indexer {
         RicciIndexer::Direct {
             index: source_index,
@@ -64,10 +64,19 @@ fn process_indexer(indexer: RicciIndexer, collector: &mut ProductionCollector) -
         } => {
             let mut indexers_streams = Vec::<TokenStream>::new();
             for indexer in indexers {
-                indexers_streams.push(process_indexer(indexer, collector))
+                indexers_streams.push(process_indexer(indexer, collector, true))
             }
             let reindexer_type = create_reindexing_type(indexers_streams.len());
-            quote! { ::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* ) }
+            if already_wrapped_by_unsafe {
+                quote! {
+                    ::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* )
+                }
+            }
+            else {
+                quote! {
+                    unsafe { ::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* ) }
+                }
+            }
         }
         RicciIndexer::Reverse {
             index: source_index,
@@ -108,7 +117,7 @@ fn process_alias_declarations(
 ) {
     for declaration in alias_declarations {
         let index = declaration.index;
-        let indexer = process_indexer(declaration.indexer, collector);
+        let indexer = process_indexer(declaration.indexer, collector, false);
         output.extend(quote! { let #index = #indexer; });
     }
 }
@@ -188,14 +197,14 @@ fn process_segments(
             } => {
                 let stream = if indexers.len() == 1 {
                     let indexer = indexers.into_iter().next().unwrap();
-                    let indexer_stream = process_indexer(indexer, collector);
+                    let indexer_stream = process_indexer(indexer, collector, true);
                     quote! {
                         (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, #indexer_stream) })
                     }
                 } else {
                     let mut indexer_streams = Vec::<TokenStream>::new();
                     for indexer in indexers.into_iter() {
-                        indexer_streams.push(process_indexer(indexer, collector));
+                        indexer_streams.push(process_indexer(indexer, collector, true));
                     }
                     quote! {
                         (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, (#(#indexer_streams, )*)) })

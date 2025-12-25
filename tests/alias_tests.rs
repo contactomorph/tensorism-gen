@@ -16,7 +16,7 @@ fn indexing_alias_format() {
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 dim_number_0,
                 | i | {
-                    let j = :: tensorism :: Reindexing1 :: get_unchecked( & sort, i );
+                    let j = unsafe { :: tensorism :: Reindexing1 :: get_unchecked( & sort, i ) };
                     (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor1, j) })
                 }
             )
@@ -39,7 +39,7 @@ fn indexing_alias_format() {
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
                 ( dim_number_0, dim_number_1, ),
                 | ( i, j, ) | {
-                    let k = :: tensorism :: Reindexing2 :: get_unchecked( & combine, i, j );
+                    let k = unsafe { :: tensorism :: Reindexing2 :: get_unchecked( & combine, i, j ) };
                     (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor2, (i, k, )) })
                 }
             )
@@ -76,14 +76,14 @@ fn indexing_alias_format() {
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
                 ( dim_number_0, dim_number_1, ),
                 | ( i, j, ) | {
-                    let k = :: tensorism :: Reindexing1 :: get_unchecked(
+                    let k = unsafe { :: tensorism :: Reindexing1 :: get_unchecked(
                         & sup,
                         :: tensorism :: Reindexing2 :: get_unchecked(
                             & middle,
                             :: tensorism :: Reindexing2 :: get_unchecked( & sub, i, j ),
                             j
                         )
-                    );
+                    ) };
                     (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor3, (k, j, i, )) })
                 }
             )
