@@ -15,7 +15,7 @@ fn plain_value_lambda_format() {
             }
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 dim_number_0,
-                | i | { ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor, ( i, plain_value_0, ) ) } ) }
+                | i | { ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor, ( i, plain_value_0, ) ) } ) }
             )
         } "#
     );
@@ -43,7 +43,7 @@ fn plain_value_lambda_format() {
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
                 (dim_number_0, dim_number_1, ),
                 | ( i, j, ) | {
-                    ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor1,
+                    ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor1,
                         (
                             :: tensorism :: Reindexing2 :: get_unchecked( & indexer, plain_value_0, j ),
                             i,

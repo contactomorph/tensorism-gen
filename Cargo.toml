@@ -15,11 +15,11 @@ readme = "README.md"
 proc-macro = true
 
 [dependencies]
+"ndarray" = "0.17.2"
 "syn" = { version = "2.0", features = ["full"]}
 "quote" = "1.0"
 "proc-macro2" = "1.0"
 "phf" = { version = "0.13.1", features = ["macros"] }
 
 [dev-dependencies]
-ndarray = "0.16.1"
 "asserts" = { path = "./asserts" }

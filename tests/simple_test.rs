@@ -12,7 +12,7 @@ fn simple_lambda_format() {
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 dim_number_0,
                 | i | {
-                    (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, i) }) + i
+                    (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor, i) }) + i
                 }
             )
         } "
@@ -28,7 +28,7 @@ fn simple_lambda_format() {
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
                 (dim_number_0, dim_number_1, ),
                 | (i, j,) | {
-                    (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor, (i, j,)) })
+                    (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor, (i, j,)) })
                 }
             )
         } "
@@ -72,10 +72,10 @@ fn layered_lambda_format() {
                 dim_number_0,
                 | i | {
                     (
-                        (0usize .. dim_number_1).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor1, (i, j,)) }) })
+                        (0usize .. dim_number_1).map(| j | { (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor1, (i, j,)) }) })
                     ).sum ::< i32 > () + (
-                        (0usize .. dim_number_2).map(| j | { (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor2, (j, i,)) }) })
-                    ).sum ::< i32 > () * (* unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget(& tensor3, i) })
+                        (0usize .. dim_number_2).map(| j | { (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor2, (j, i,)) }) })
+                    ).sum ::< i32 > () * (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor3, i) })
                 }
             )
         } "##

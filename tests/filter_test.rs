@@ -18,9 +18,9 @@ fn filter_lambda_format() {
                 | i | {
                     (
                         ( 0usize .. dim_number_1 ).filter( | & j | {
-                            ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor2, j ) } ) < j as i32
+                            ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor2, j ) } ) < j as i32
                         } ).map( | j | {
-                            ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor1, ( i, j, ) ) } )
+                            ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor1, ( i, j, ) ) } )
                         } )
                     ).sum ::< i32 > ( ) + i as i32
                 }
@@ -52,9 +52,9 @@ fn filter_lambda_format() {
                         ( 0usize .. dim_number_2 ).flat_map( move | k | {
                             ( 0usize .. dim_number_1 ).map( move | j | { ( j, k, ) } )
                         } ).filter( | & ( j, k, ) | {
-                            ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor3, j ) } ) < ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor4, k ) } )
+                            ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor3, j ) } ) < ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor4, k ) } )
                         } ).map( | ( j, k, ) | {
-                            ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor1, ( i, j, ) ) } ) * ( * unsafe { :: ndarray :: ArrayBase :: < _, _ > :: uget( & tensor2, ( i, k, ) ) } )
+                            ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor1, ( i, j, ) ) } ) * ( * unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget( & tensor2, ( i, k, ) ) } )
                         } )
                     ).sum ::< f64 > ( )
                 }

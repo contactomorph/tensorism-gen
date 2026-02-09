@@ -202,7 +202,7 @@ fn process_segments(
                     let indexer = indexers.into_iter().next().unwrap();
                     let indexer_stream = process_indexer(indexer, collector, true);
                     quote! {
-                        (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, #indexer_stream) })
+                        (* unsafe{ ::ndarray::ArrayRef::< _, _ >::uget(& #tensor_name, #indexer_stream) })
                     }
                 } else {
                     let mut indexer_streams = Vec::<TokenStream>::new();
@@ -210,7 +210,7 @@ fn process_segments(
                         indexer_streams.push(process_indexer(indexer, collector, true));
                     }
                     quote! {
-                        (* unsafe{ ::ndarray::ArrayBase::< _, _ >::uget(& #tensor_name, (#(#indexer_streams, )*)) })
+                        (* unsafe{ ::ndarray::ArrayRef::< _, _ >::uget(& #tensor_name, (#(#indexer_streams, )*)) })
                     }
                 };
                 output.extend(stream);
