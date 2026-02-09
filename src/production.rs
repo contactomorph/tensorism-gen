@@ -51,7 +51,11 @@ fn create_reindexing_type(rank: usize) -> Ident {
     format_ident!("Reindexing{}", rank)
 }
 
-fn process_indexer(indexer: RicciIndexer, collector: &mut ProductionCollector, already_wrapped_by_unsafe: bool) -> TokenStream {
+fn process_indexer(
+    indexer: RicciIndexer,
+    collector: &mut ProductionCollector,
+    already_wrapped_by_unsafe: bool,
+) -> TokenStream {
     match indexer {
         RicciIndexer::Direct {
             index: source_index,
@@ -71,8 +75,7 @@ fn process_indexer(indexer: RicciIndexer, collector: &mut ProductionCollector, a
                 quote! {
                     ::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* )
                 }
-            }
-            else {
+            } else {
                 quote! {
                     unsafe { ::tensorism::#reindexer_type::get_unchecked( &#reindexing_name, #(#indexers_streams),* ) }
                 }

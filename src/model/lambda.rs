@@ -107,13 +107,13 @@ impl Parse for RicciSegment {
             })
         } else {
             let token: TokenTree = input.parse()?;
-            if let TokenTree::Ident(ident) = &token {
-                if ILLEGAL_KEYWORDS.contains(ident.to_string().as_str()) {
-                    return Err(Error::new(
-                        ident.span(),
-                        format!("Keyword {} is illegal.", ident),
-                    ));
-                }
+            if let TokenTree::Ident(ident) = &token
+                && ILLEGAL_KEYWORDS.contains(ident.to_string().as_str())
+            {
+                return Err(Error::new(
+                    ident.span(),
+                    format!("Keyword {} is illegal.", ident),
+                ));
             }
             Ok(RicciSegment::Token(token))
         }
