@@ -9,7 +9,6 @@ use crate::model::header::{RicciAliasDeclaration, RicciIndexDeclaration, RicciIn
 use phf::{Set, phf_set};
 
 static ILLEGAL_KEYWORDS: Set<&'static str> = phf_set! {
-    "let",
     "while",
     "loop",
     "break",
@@ -296,13 +295,6 @@ mod tests {
 
     #[test]
     fn parse_invalid() {
-        let tokens = quote!(for i => { let name = a[i]; name });
-
-        assert_eq!(
-            asserts::parse_and_display::<RicciLambda>(tokens),
-            "Failed to parse type `tensorism_gen::model::lambda::RicciLambda`: Keyword let is illegal."
-        );
-
         let tokens = quote!(for i => { while ok { a[i] } });
 
         assert_eq!(
