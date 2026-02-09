@@ -14,7 +14,7 @@ mod production;
 
 use quote::ToTokens;
 
-use crate::analysis::inspection::inspect;
+use crate::analysis::{inspection::inspect, top_group};
 
 fn simplify(text: &str) -> String {
     let mut result = String::new();
@@ -34,12 +34,12 @@ pub fn new_ndarray(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let message = format!("Failed to parse input: {}", error);
             quote! { compile_error!(#message) }.into()
         }
-        Ok(group) => match inspect(&group) {
+        Ok(group) => match inspect(group) {
             Err(error) => {
                 let message = format!("Index issues: {}", error);
                 quote! { compile_error!(#message) }.into()
             }
-            Ok(mapping) => production::produce(group, mapping).into(),
+            Ok((top_group, mapping)) => production::produce(top_group, mapping).into(),
         },
     }
 }
@@ -52,13 +52,13 @@ pub fn format_new_ndarray(input: proc_macro::TokenStream) -> proc_macro::TokenSt
             let message = format!("Failed to parse input: {}", error);
             quote! { compile_error!(#message) }.into()
         }
-        Ok(group) => match inspect(&group) {
+        Ok(group) => match inspect(group) {
             Err(error) => {
                 let message = format!("Index issues: {}", error);
                 quote! { compile_error!(#message) }.into()
             }
-            Ok(mapping) => {
-                let output = production::produce(group, mapping);
+            Ok((top_group, mapping)) => {
+                let output = production::produce(top_group, mapping);
                 let string = simplify(&output.to_string());
                 let mut output = TokenStream::new();
                 TokenTree::Literal(Literal::string(string.as_str())).to_tokens(&mut output);

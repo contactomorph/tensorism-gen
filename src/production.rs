@@ -5,8 +5,9 @@ use crate::analysis::types::{
     IndexingPositionEquivalence, IndexingPositionMapping, PositionalPlainValue,
 };
 use crate::model::header::{RicciAliasDeclaration, RicciIndexer};
-use crate::model::lambda::{RicciGroup, RicciLambda, RicciSegment};
+use crate::model::lambda::{RicciLambda, RicciSegment};
 use crate::quote::ToTokens;
+use crate::top_group::TopGroup;
 use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
 
 pub struct ProductionCollector {
@@ -262,20 +263,6 @@ fn process_main_lambda(
     }
 }
 
-fn process_main_group(group: RicciGroup, output: &mut TokenStream) {
-    let mut collector = ProductionCollector::new();
-    if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
-        for segment in group.segments {
-            if let RicciSegment::SubLambda(lambda) = segment {
-                process_main_lambda(*lambda, &mut collector, output);
-                return;
-            }
-        }
-    } else {
-        process_segments(group.segments, &mut collector, output)
-    }
-}
-
 fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
     let name = &position.name;
     match position.content {
@@ -378,8 +365,7 @@ fn format_alias_source(alias_source: &AliasSource, alias: &Ident) -> String {
     }
 }
 
-pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenStream {
-    let mut content = TokenStream::new();
+pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>, output: &mut TokenStream) {
     for equivalence in equivalences {
         let IndexingPositionEquivalence {
             ricci_number,
@@ -395,7 +381,7 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenS
             let definition = quote! {
                 let #dimension_var = #value;
             };
-            content.extend(definition);
+            output.extend(definition);
             maybe_dimension_var = Some((dimension_var, position));
         }
         for position in positions.iter() {
@@ -407,7 +393,7 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenS
                     let definition = quote! {
                         let #dimension_var = #value;
                     };
-                    content.extend(definition);
+                    output.extend(definition);
                     maybe_dimension_var = Some((dimension_var, position));
                 }
                 Some((dimension_var, previous_position)) => {
@@ -421,22 +407,34 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>) -> TokenS
                             panic!(#message);
                         }
                     };
-                    content.extend(consistency_check);
+                    output.extend(consistency_check);
                 }
             }
         }
     }
-    content
 }
 
-pub fn produce(group: RicciGroup, mapping: IndexingPositionMapping) -> TokenStream {
+pub fn produce(top_group: TopGroup, mapping: IndexingPositionMapping) -> TokenStream {
     let IndexingPositionMapping {
         equivalences,
         plain_values,
     } = mapping;
-    let mut content = produce_prelude(equivalences);
+
+    let mut content = TokenStream::new();
+
+    produce_prelude(equivalences, &mut content);
     process_plain_values(plain_values, &mut content);
-    process_main_group(group, &mut content);
+
+    match top_group {
+        TopGroup::Group(group) => {
+            let mut collector = ProductionCollector::new();
+            process_segments(group.segments, &mut collector, &mut content);
+        }
+        TopGroup::Lambda(lambda) => {
+            let mut collector = ProductionCollector::new();
+            process_main_lambda(*lambda, &mut collector, &mut content);
+        }
+    }
     let mut output = TokenStream::new();
     TokenTree::Group(Group::new(Delimiter::Brace, content)).to_tokens(&mut output);
     output

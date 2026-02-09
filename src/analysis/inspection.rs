@@ -1,6 +1,7 @@
 use proc_macro2::Ident;
 use syn::Error;
 
+use crate::analysis::top_group::TopGroup;
 use crate::analysis::types::{
     AliasSource, HeadKind, IndexingPosition, IndexingPositionContent, IndexingPositionMapping,
     InspectionCollector,
@@ -229,12 +230,12 @@ fn inspect_segments(
     Ok(())
 }
 
-fn inspect_main_group(
-    group: &RicciGroup,
+fn inspect_top_group(
+    group: RicciGroup,
     collector: &mut InspectionCollector,
-) -> Result<(), syn::Error> {
+) -> Result<TopGroup, syn::Error> {
     if group.segments.len() == 1 && matches!(group.segments[0], RicciSegment::SubLambda(_)) {
-        for segment in &group.segments {
+        for segment in group.segments {
             if let RicciSegment::SubLambda(lambda) = segment {
                 if let Some(filter) = &lambda.filter {
                     return Err(Error::new_spanned(
@@ -242,20 +243,26 @@ fn inspect_main_group(
                         "Macro level lambda cannot have a filter.",
                     ));
                 }
-                return inspect_lambda(lambda, collector);
+                return match inspect_lambda(&lambda, collector) {
+                    Ok(_) => Ok(TopGroup::Lambda(lambda)),
+                    Err(e) => Err(e),
+                };
             }
         }
         unreachable!()
     } else {
-        inspect_segments(&group.segments, collector)
+        match inspect_segments(&group.segments, collector) {
+            Ok(_) => Ok(TopGroup::Group(group)),
+            Err(e) => Err(e),
+        }
     }
 }
 
-pub fn inspect(group: &RicciGroup) -> Result<IndexingPositionMapping, syn::Error> {
+pub fn inspect(group: RicciGroup) -> Result<(TopGroup, IndexingPositionMapping), syn::Error> {
     let mut collector = InspectionCollector::new();
-    inspect_main_group(group, &mut collector)?;
+    let top_group = inspect_top_group(group, &mut collector)?;
     let mapping = collector.into_mapping();
-    Ok(mapping)
+    Ok((top_group, mapping))
 }
 
 #[cfg(test)]
@@ -277,7 +284,7 @@ mod tests {
 
         let lambda = parse2::<RicciGroup>(tokens).unwrap();
 
-        let mapping = inspect(&lambda).unwrap();
+        let (_, mapping) = inspect(lambda).unwrap();
 
         let IndexingPositionMapping {
             equivalences,
@@ -294,7 +301,7 @@ mod tests {
 
         let lambda = parse2::<RicciGroup>(tokens).unwrap();
 
-        let mapping = inspect(&lambda).unwrap();
+        let (_, mapping) = inspect(lambda).unwrap();
 
         let IndexingPositionMapping {
             equivalences,
@@ -320,7 +327,7 @@ mod tests {
 
         let lambda = parse2::<RicciGroup>(tokens).unwrap();
 
-        let mapping = inspect(&lambda).unwrap();
+        let (_, mapping) = inspect(lambda).unwrap();
 
         let IndexingPositionMapping { equivalences, .. } = mapping;
 
@@ -344,7 +351,7 @@ mod tests {
 
         let lambda = parse2::<RicciGroup>(tokens).unwrap();
 
-        let mapping = inspect(&lambda).unwrap();
+        let (_, mapping) = inspect(lambda).unwrap();
 
         let IndexingPositionMapping { equivalences, .. } = mapping;
 
@@ -395,7 +402,7 @@ mod tests {
 
         let lambda = parse2::<RicciGroup>(tokens).unwrap();
 
-        match inspect(&lambda) {
+        match inspect(lambda) {
             Ok(_) => panic!("Expected error"),
             Err(err) => assert_eq!(err.to_string(), "Macro level lambda cannot have a filter."),
         }
