@@ -8,7 +8,8 @@ use crate::model::header::{RicciAliasDeclaration, RicciIndexer};
 use crate::model::lambda::{RicciLambda, RicciSegment};
 use crate::quote::ToTokens;
 use crate::top_group::TopGroup;
-use proc_macro2::{Delimiter, Group, Ident, Literal, TokenStream, TokenTree};
+use crate::unification::{add_unification_for_group, add_unification_for_lambda};
+use proc_macro2::{Delimiter, Group, Ident, Literal, Punct, TokenStream, TokenTree};
 
 pub struct ProductionCollector {
     free_ricci_number: IncreasingInteger,
@@ -41,11 +42,19 @@ impl ProductionCollector {
 }
 
 fn create_dim_identifier(ricci_number: usize) -> Ident {
-    format_ident!("dim_number_{}", ricci_number)
+    format_ident!("tsm_dim_{}", ricci_number)
 }
 
 fn create_plain_identifier(plain_number: usize) -> Ident {
-    format_ident!("plain_value_{}", plain_number)
+    format_ident!("tsm_plain_{}", plain_number)
+}
+
+fn create_ptr_identifier(tensor_name: &Ident) -> Ident {
+    format_ident!("tsm_ptr_{}", tensor_name)
+}
+
+fn create_stride_identifier(i: usize, tensor_name: &Ident) -> Ident {
+    format_ident!("tsm_stride_{}_{}", i, tensor_name)
 }
 
 fn create_reindexing_type(rank: usize) -> Ident {
@@ -87,7 +96,7 @@ fn process_indexer(
         } => {
             let ricci_number = collector.get_ricci_number(&source_index).unwrap();
             let dim = create_dim_identifier(ricci_number);
-            quote! { #dim - 1 - #source_index }
+            quote! { (#dim - 1 - #source_index) }
         }
         RicciIndexer::Plain { .. } => {
             let plain_number = collector.upsert_plain_number();
@@ -97,21 +106,22 @@ fn process_indexer(
     }
 }
 
-fn process_plain_values(plain_values: Vec<PositionalPlainValue>, output: &mut TokenStream) {
-    for plain_value in plain_values {
-        let plain = create_plain_identifier(plain_value.plain_number);
-        let expr = plain_value.expr;
-        let value = produce_dimension_value(&plain_value.position);
-        let index = Ident::new("plain", proc_macro2::Span::call_site());
-        let position = format_position(&plain_value.position, &index);
-        let message = format!("Plain value is out of bounds in {}", position);
-        output.extend(quote! {
-            let #plain: usize = #expr;
-            if #plain >= #value {
-                panic!(#message);
-            }
-        });
+fn process_indexers(
+    indexers: Vec<RicciIndexer>,
+    tensor_name: &Ident,
+    collector: &mut ProductionCollector,
+) -> TokenStream {
+    let mut indexer_stream = TokenStream::new();
+    for (i, indexer) in indexers.into_iter().enumerate() {
+        let indexer_content = process_indexer(indexer, collector, true);
+        let stride_name = create_stride_identifier(i, tensor_name);
+        if 0 < i {
+            TokenTree::Punct(Punct::new('+', proc_macro2::Spacing::Alone))
+                .to_tokens(&mut indexer_stream);
+        }
+        indexer_stream.extend(quote! { (#indexer_content as isize) * #stride_name });
     }
+    indexer_stream
 }
 
 fn process_alias_declarations(
@@ -153,7 +163,7 @@ fn process_lambda(
         };
         output.extend(lambda_stream);
     } else {
-        let indexes_tuple = quote! {(#(#indexes),*, )};
+        let indexes_tuple = quote! {(#(#indexes,)* )};
         let mut header = indexes_tuple.clone();
 
         for (i, index) in indexes.iter().enumerate() {
@@ -199,20 +209,10 @@ fn process_segments(
                 tensor_name,
                 indexers,
             } => {
-                let stream = if indexers.len() == 1 {
-                    let indexer = indexers.into_iter().next().unwrap();
-                    let indexer_stream = process_indexer(indexer, collector, true);
-                    quote! {
-                        (* unsafe{ ::ndarray::ArrayRef::<_, _>::uget(& #tensor_name, #indexer_stream) })
-                    }
-                } else {
-                    let mut indexer_streams = Vec::<TokenStream>::new();
-                    for indexer in indexers.into_iter() {
-                        indexer_streams.push(process_indexer(indexer, collector, true));
-                    }
-                    quote! {
-                        (* unsafe{ ::ndarray::ArrayRef::<_, _>::uget(& #tensor_name, (#(#indexer_streams, )*)) })
-                    }
+                let indexer_stream = process_indexers(indexers, &tensor_name, collector);
+                let ptr_name = create_ptr_identifier(&tensor_name);
+                let stream = quote! {
+                    (*unsafe { &*#ptr_name.offset(#indexer_stream) })
                 };
                 output.extend(stream);
             }
@@ -231,36 +231,36 @@ fn process_main_lambda(
     if lambda.filter.is_some() {
         panic!("Macro level lambda cannot have a filter.");
     }
-    let dimensions = &lambda
-        .index_declaration
-        .indexes
-        .iter()
-        .map(|ident| create_dim_identifier(collector.upsert_ricci_number(ident)))
-        .collect::<Vec<_>>();
-    let indexes = lambda.index_declaration.indexes;
+
     let mut body = TokenStream::new();
-    let order = dimensions.len();
     process_alias_declarations(lambda.alias_declarations, collector, &mut body);
     process_segments(lambda.body.segments, collector, &mut body);
-    if order == 1 {
-        let dimension = &dimensions[0];
-        let index = &indexes[0];
-        quote! {
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
-                #dimension,
-                |#index| { #body }
-            )
+
+    let mut indexes = lambda.index_declaration.indexes;
+    let mut first = true;
+    indexes.reverse();
+    for index in indexes {
+        let dimension = create_dim_identifier(collector.ricci_numbers_per_index[&index]);
+        if first {
+            body = quote! {
+                for #index in 0usize..#dimension {
+                    let tsm_value = { #body };
+                    unsafe {
+                        tsm_res_ptr.write(tsm_value);
+                        tsm_res_ptr = tsm_res_ptr.add(1);
+                    }
+                };
+            };
+            first = false;
+        } else {
+            body = quote! {
+                for #index in 0usize..#dimension {
+                    #body
+                };
+            };
         }
-        .to_tokens(output);
-    } else {
-        quote! {
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; #order]>>::from_shape_fn(
-                (#(#dimensions),*, ),
-                |(#(#indexes),*, )| { #body }
-            )
-        }
-        .to_tokens(output);
     }
+    output.extend(body);
 }
 
 fn produce_dimension_value(position: &IndexingPosition) -> TokenStream {
@@ -365,7 +365,14 @@ fn format_alias_source(alias_source: &AliasSource, alias: &Ident) -> String {
     }
 }
 
-pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>, output: &mut TokenStream) {
+pub fn produce_prelude(
+    equivalences: Vec<IndexingPositionEquivalence>,
+    plain_values: Vec<PositionalPlainValue>,
+    output: &mut TokenStream,
+) {
+    let mut tensors_with_ranks = HashMap::<Ident, usize>::new();
+    let mut tensors = Vec::<Ident>::new();
+
     for equivalence in equivalences {
         let IndexingPositionEquivalence {
             ricci_number,
@@ -385,6 +392,14 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>, output: &
             maybe_dimension_var = Some((dimension_var, position));
         }
         for position in positions.iter() {
+            if let IndexingPositionContent::TensorIndex(_, rank) = position.content
+                && tensors_with_ranks
+                    .insert(position.name.clone(), rank)
+                    .is_none()
+            {
+                tensors.push(position.name.clone());
+            }
+
             let value = produce_dimension_value(position);
             let position = format_position(position, &index);
             match &maybe_dimension_var {
@@ -405,11 +420,54 @@ pub fn produce_prelude(equivalences: Vec<IndexingPositionEquivalence>, output: &
                     let consistency_check = quote! {
                         if #dimension_var != #value {
                             panic!(#message);
-                        }
+                        };
                     };
                     output.extend(consistency_check);
                 }
             }
+        }
+    }
+
+    for plain_value in plain_values {
+        if let IndexingPositionContent::TensorIndex(_, rank) = plain_value.position.content
+            && tensors_with_ranks
+                .insert(plain_value.position.name.clone(), rank)
+                .is_none()
+        {
+            tensors.push(plain_value.position.name.clone());
+        }
+
+        let plain = create_plain_identifier(plain_value.plain_number);
+        let expr = plain_value.expr;
+        let value = produce_dimension_value(&plain_value.position);
+        let index = Ident::new("plain", proc_macro2::Span::call_site());
+        let position = format_position(&plain_value.position, &index);
+        let message = format!("Plain value is out of bounds in {}", position);
+        let plain_value_declaration = quote! {
+            let #plain: usize = #expr;
+            if #plain >= #value {
+                panic!(#message);
+            };
+        };
+        output.extend(plain_value_declaration);
+    }
+
+    tensors.sort();
+
+    for tensor_name in tensors.into_iter() {
+        let rank = tensors_with_ranks[&tensor_name];
+        let ptr_name = create_ptr_identifier(&tensor_name);
+        let ptr_declaration = quote! {
+            let #ptr_name: *const _ = #tensor_name.as_ptr();
+            let tsm_strides = #tensor_name.strides();
+        };
+        output.extend(ptr_declaration);
+        for i in 0..rank {
+            let stride_name = create_stride_identifier(i, &tensor_name);
+            let stride_declaration = quote! {
+                let #stride_name: isize = tsm_strides[#i];
+            };
+            output.extend(stride_declaration);
         }
     }
 }
@@ -422,17 +480,32 @@ pub fn produce(top_group: TopGroup, mapping: IndexingPositionMapping) -> TokenSt
 
     let mut content = TokenStream::new();
 
-    produce_prelude(equivalences, &mut content);
-    process_plain_values(plain_values, &mut content);
+    produce_prelude(equivalences, plain_values, &mut content);
 
     match top_group {
         TopGroup::Group(group) => {
             let mut collector = ProductionCollector::new();
+            add_unification_for_group(&group, &mut content);
             process_segments(group.segments, &mut collector, &mut content);
         }
         TopGroup::Lambda(lambda) => {
             let mut collector = ProductionCollector::new();
+            let mut dimensions = Vec::<Ident>::new();
+            for index in &lambda.index_declaration.indexes {
+                collector.upsert_ricci_number(index);
+                let dimension = create_dim_identifier(collector.ricci_numbers_per_index[index]);
+                dimensions.push(dimension);
+            }
+            let order = Literal::usize_suffixed(lambda.index_declaration.indexes.len());
+            let ptr_declaration = quote! {
+                type TsmDimensionType = ::ndarray::Dim<[::ndarray::Ix;#order]>;
+                let mut tsm_res = ::ndarray::Array::<_,TsmDimensionType>::uninit((#(#dimensions,)*));
+                let mut tsm_res_ptr = tsm_res.as_mut_ptr() as *mut _;
+            };
+            content.extend(ptr_declaration);
+            add_unification_for_lambda(&lambda, &mut content);
             process_main_lambda(*lambda, &mut collector, &mut content);
+            content.extend(quote! { unsafe { tsm_res.assume_init() } });
         }
     }
     let mut output = TokenStream::new();

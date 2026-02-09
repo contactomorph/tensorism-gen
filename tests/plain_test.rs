@@ -8,15 +8,27 @@ fn plain_value_lambda_format() {
     asserts::equivalent!(
         format,
         r#"{
-            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor).0;
-            let plain_value_0 : usize = 1;
-            if plain_value_0 >= ::ndarray::ArrayBase::<_, _>::dim( &tensor ).1  {
-                panic!( "Plain value is out of bounds in tensor[ _, plain ]" );
-            }
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
-                dim_number_0,
-                | i | { ( * unsafe { ::ndarray::ArrayRef::<_, _>::uget( &tensor, ( i, plain_value_0, ) ) } ) }
-            )
+            let tsm_dim_0 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor). 0 ;
+            let tsm_plain_0 : usize = 1 ;
+            if tsm_plain_0 >= :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor). 1 {
+                panic ! ("Plain value is out of bounds in tensor[_, plain]");
+            };
+            let tsm_ptr_tensor : * const _ = tensor . as_ptr ();
+            let tsm_strides = tensor . strides ();
+            let tsm_stride_0_tensor : isize = tsm_strides [0usize];
+            let tsm_stride_1_tensor : isize = tsm_strides [1usize];
+            type TsmDimensionType = :: ndarray :: Dim < [:: ndarray :: Ix ; 1usize]> ;
+            let mut tsm_res = :: ndarray :: Array :: < _ , TsmDimensionType > :: uninit ((tsm_dim_0 ,));
+            let mut tsm_res_ptr = tsm_res . as_mut_ptr ()as * mut _ ;
+            fn tsm_unify < T , D > (_tensor : & :: ndarray :: Array :: < std :: mem :: MaybeUninit < T > , D > , _ptr : * mut T , _f : impl Fn ()-> T ,){}
+            tsm_unify (& tsm_res , tsm_res_ptr , || {(* unsafe {& * tsm_ptr_tensor})});
+            for i in 0usize .. tsm_dim_0 {
+                let tsm_value = {
+                    (* unsafe {& * tsm_ptr_tensor . offset ((i as isize)* tsm_stride_0_tensor + (tsm_plain_0 as isize)* tsm_stride_1_tensor)})
+                };
+                unsafe {tsm_res_ptr . write (tsm_value); tsm_res_ptr = tsm_res_ptr . add (1);}
+            };
+            unsafe {tsm_res . assume_init ()}
         } "#
     );
 
@@ -26,32 +38,39 @@ fn plain_value_lambda_format() {
     asserts::equivalent!(
         format,
         r#"{
-            let dim_number_2 = ::ndarray::ArrayBase::<_, _>::dim( &tensor1 ).0;
-            if dim_number_2 != ::tensorism::Reindexing2::get_output_bound( &indexer ) {
-                panic!( "Dimensions are not matching between tensor1[ indexer, _, _ ] and indexer = indexer[ _, _ ]" );
-            }
-            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim( &tensor1 ).1;
-            let dim_number_1 = ::tensorism::Reindexing2::get_input1_bound( &indexer );
-            let plain_value_0 : usize = 3 * n - 2;
-            if plain_value_0 >= ::tensorism::Reindexing2::get_input0_bound( &indexer ) {
-                panic!( "Plain value is out of bounds in indexer[ plain, _ ]" );
-            }
-            let plain_value_1 : usize = 2 * n + 1;
-            if plain_value_1 >= ::ndarray::ArrayBase::<_, _>::dim( &tensor1 ).2 {
-                panic!( "Plain value is out of bounds in tensor1[ _, _, plain ]" );
-            }
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 2usize]>>::from_shape_fn(
-                (dim_number_0, dim_number_1, ),
-                | ( i, j, ) | {
-                    ( * unsafe { ::ndarray::ArrayRef::<_, _>::uget( &tensor1,
-                        (
-                            ::tensorism::Reindexing2::get_unchecked( &indexer, plain_value_0, j ),
-                            i,
-                            plain_value_1,
-                        )
-                    ) } )
-                }
-            )
+            let tsm_dim_2 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor1). 0 ;
+            if tsm_dim_2 != :: tensorism :: Reindexing2 :: get_output_bound (& indexer){
+                panic ! ("Dimensions are not matching between tensor1[indexer, _, _] and indexer = indexer[_, _]");
+            };
+            let tsm_dim_0 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor1). 1 ;
+            let tsm_dim_1 = :: tensorism :: Reindexing2 :: get_input1_bound (& indexer);
+            let tsm_plain_0 : usize = 3 * n - 2 ;
+            if tsm_plain_0 >= :: tensorism :: Reindexing2 :: get_input0_bound (& indexer){
+                panic ! ("Plain value is out of bounds in indexer[plain, _]");
+            };
+            let tsm_plain_1 : usize = 2 * n + 1 ;
+            if tsm_plain_1 >= :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor1). 2 {
+                panic ! ("Plain value is out of bounds in tensor1[_, _, plain]");
+            };
+            let tsm_ptr_tensor1 : * const _ = tensor1 . as_ptr ();
+            let tsm_strides = tensor1 . strides ();
+            let tsm_stride_0_tensor1 : isize = tsm_strides [0usize];
+            let tsm_stride_1_tensor1 : isize = tsm_strides [1usize];
+            let tsm_stride_2_tensor1 : isize = tsm_strides [2usize];
+            type TsmDimensionType = :: ndarray :: Dim < [:: ndarray :: Ix ; 2usize]> ;
+            let mut tsm_res = :: ndarray :: Array :: < _ , TsmDimensionType > :: uninit ((tsm_dim_0 , tsm_dim_1 ,));
+            let mut tsm_res_ptr = tsm_res . as_mut_ptr ()as * mut _ ;
+            fn tsm_unify < T , D > (_tensor : & :: ndarray :: Array :: < std :: mem :: MaybeUninit < T > , D > , _ptr : * mut T , _f : impl Fn ()-> T ,){}
+            tsm_unify (& tsm_res , tsm_res_ptr , || {(* unsafe {& * tsm_ptr_tensor1})});
+            for i in 0usize .. tsm_dim_0 {
+                for j in 0usize .. tsm_dim_1 {
+                    let tsm_value = {
+                        (* unsafe {& * tsm_ptr_tensor1 . offset ((:: tensorism :: Reindexing2 :: get_unchecked (& indexer , tsm_plain_0 , j)as isize)* tsm_stride_0_tensor1 + (i as isize)* tsm_stride_1_tensor1 + (tsm_plain_1 as isize)* tsm_stride_2_tensor1)})
+                    };
+                    unsafe {tsm_res_ptr . write (tsm_value); tsm_res_ptr = tsm_res_ptr . add (1);}
+                };
+            };
+            unsafe {tsm_res . assume_init ()}
         } "#
     );
 }

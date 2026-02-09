@@ -11,6 +11,7 @@ use proc_macro2::{Literal, TokenStream, TokenTree};
 mod analysis;
 mod model;
 mod production;
+mod unification;
 
 use quote::ToTokens;
 

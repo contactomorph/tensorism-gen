@@ -8,13 +8,22 @@ fn simple_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor);
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
-                dim_number_0,
-                | i | {
-                    (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor, i) }) + i
-                }
-            )
+            let tsm_dim_0 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor);
+            let tsm_ptr_tensor : * const _ = tensor . as_ptr ();
+            let tsm_strides = tensor . strides ();
+            let tsm_stride_0_tensor : isize = tsm_strides [0usize];
+            type TsmDimensionType = :: ndarray :: Dim < [:: ndarray :: Ix ; 1usize]> ;
+            let mut tsm_res = :: ndarray :: Array :: < _ , TsmDimensionType > :: uninit ((tsm_dim_0 ,));
+            let mut tsm_res_ptr = tsm_res . as_mut_ptr ()as * mut _ ;
+            fn tsm_unify < T , D > (_tensor : & :: ndarray :: Array :: < std :: mem :: MaybeUninit < T > , D > , _ptr : * mut T , _f : impl Fn ()-> T ,){}
+            tsm_unify (& tsm_res , tsm_res_ptr , || {(* unsafe {& * tsm_ptr_tensor})+ 0usize});
+            for i in 0usize .. tsm_dim_0 {
+                let tsm_value = {
+                    (* unsafe {& * tsm_ptr_tensor . offset ((i as isize)* tsm_stride_0_tensor)})+ i
+                };
+                unsafe {tsm_res_ptr . write (tsm_value); tsm_res_ptr = tsm_res_ptr . add (1);}
+            };
+            unsafe {tsm_res . assume_init ()}
         } "
     );
 
@@ -23,14 +32,26 @@ fn simple_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor).0;
-            let dim_number_1 = ::ndarray::ArrayBase::<_, _>::dim(&tensor).1;
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 2usize]>>::from_shape_fn(
-                (dim_number_0, dim_number_1, ),
-                | (i, j,) | {
-                    (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor, (i, j,)) })
-                }
-            )
+            let tsm_dim_0 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor). 0 ;
+            let tsm_dim_1 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor). 1 ;
+            let tsm_ptr_tensor : * const _ = tensor . as_ptr ();
+            let tsm_strides = tensor . strides ();
+            let tsm_stride_0_tensor : isize = tsm_strides [0usize];
+            let tsm_stride_1_tensor : isize = tsm_strides [1usize];
+            type TsmDimensionType = :: ndarray :: Dim < [:: ndarray :: Ix ; 2usize]> ;
+            let mut tsm_res = :: ndarray :: Array :: < _ , TsmDimensionType > :: uninit ((tsm_dim_0 , tsm_dim_1 ,));
+            let mut tsm_res_ptr = tsm_res . as_mut_ptr ()as * mut _ ;
+            fn tsm_unify < T , D > (_tensor : & :: ndarray :: Array :: < std :: mem :: MaybeUninit < T > , D > , _ptr : * mut T , _f : impl Fn ()-> T ,){}
+            tsm_unify (& tsm_res , tsm_res_ptr , || {(* unsafe {& * tsm_ptr_tensor})});
+            for i in 0usize .. tsm_dim_0 {
+                for j in 0usize .. tsm_dim_1 {
+                    let tsm_value = {
+                        (* unsafe {& * tsm_ptr_tensor . offset ((i as isize)* tsm_stride_0_tensor + (j as isize)* tsm_stride_1_tensor)})
+                    };
+                    unsafe {tsm_res_ptr . write (tsm_value); tsm_res_ptr = tsm_res_ptr . add (1);}
+                };
+            };
+            unsafe {tsm_res . assume_init ()}
         } "
     );
 }
@@ -59,25 +80,38 @@ fn layered_lambda_format() {
     asserts::equivalent!(
         format,
         r##"{
-            let dim_number_1 = ::ndarray::ArrayBase::<_, _>::dim(&tensor1).1;
-            let dim_number_2 = ::ndarray::ArrayBase::<_, _>::dim(&tensor2).0;
-            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor1).0;
-            if dim_number_0 != ::ndarray::ArrayBase::<_, _>::dim( &tensor2 ).1 {
-                panic!( "Dimensions are not matching between tensor1[ i, _ ] and tensor2[ _, i ]" );
-            }
-            if dim_number_0 != ::ndarray::ArrayBase::<_, _>::dim( &tensor3 ) {
-                panic!( "Dimensions are not matching between tensor1[ i, _ ] and tensor3[ i ]" );
-            }
-            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
-                dim_number_0,
-                | i | {
-                    (
-                        (0usize .. dim_number_1).map(| j | { (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor1, (i, j,)) }) })
-                    ).sum::< i32 > () + (
-                        (0usize .. dim_number_2).map(| j | { (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor2, (j, i,)) }) })
-                    ).sum::< i32 > () * (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor3, i) })
-                }
-            )
+            let tsm_dim_1 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor1). 1 ;
+            let tsm_dim_2 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor2). 0 ;
+            let tsm_dim_0 = :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor1). 0 ;
+            if tsm_dim_0 != :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor2). 1 {
+                panic ! ("Dimensions are not matching between tensor1[i, _] and tensor2[_, i]");
+            };
+            if tsm_dim_0 != :: ndarray :: ArrayBase :: < _ , _ > :: dim (& tensor3){
+                panic ! ("Dimensions are not matching between tensor1[i, _] and tensor3[i]");
+            };
+            let tsm_ptr_tensor1 : * const _ = tensor1 . as_ptr ();
+            let tsm_strides = tensor1 . strides ();
+            let tsm_stride_0_tensor1 : isize = tsm_strides [0usize];
+            let tsm_stride_1_tensor1 : isize = tsm_strides [1usize];
+            let tsm_ptr_tensor2 : * const _ = tensor2 . as_ptr ();
+            let tsm_strides = tensor2 . strides ();
+            let tsm_stride_0_tensor2 : isize = tsm_strides [0usize];
+            let tsm_stride_1_tensor2 : isize = tsm_strides [1usize];
+            let tsm_ptr_tensor3 : * const _ = tensor3 . as_ptr ();
+            let tsm_strides = tensor3 . strides ();
+            let tsm_stride_0_tensor3 : isize = tsm_strides [0usize];
+            type TsmDimensionType = :: ndarray :: Dim < [:: ndarray :: Ix ; 1usize]> ;
+            let mut tsm_res = :: ndarray :: Array :: < _ , TsmDimensionType > :: uninit ((tsm_dim_0 ,));
+            let mut tsm_res_ptr = tsm_res . as_mut_ptr ()as * mut _ ;
+            fn tsm_unify < T , D > (_tensor : & :: ndarray :: Array :: < std :: mem :: MaybeUninit < T > , D > , _ptr : * mut T , _f : impl Fn ()-> T ,){}
+            tsm_unify (& tsm_res , tsm_res_ptr , || {((0usize ..). map (| _ | {(* unsafe {& * tsm_ptr_tensor1})})). sum ::< i32 > ()+ ((0usize ..). map (| _ | {(* unsafe {& * tsm_ptr_tensor2})})). sum ::< i32 > ()* (* unsafe {& * tsm_ptr_tensor3})});
+            for i in 0usize .. tsm_dim_0 {
+                let tsm_value = {
+                    ((0usize .. tsm_dim_1). map (| j | {(* unsafe {& * tsm_ptr_tensor1 . offset ((i as isize)* tsm_stride_0_tensor1 + (j as isize)* tsm_stride_1_tensor1)})})). sum ::< i32 > ()+ ((0usize .. tsm_dim_2). map (| j | {(* unsafe {& * tsm_ptr_tensor2 . offset ((j as isize)* tsm_stride_0_tensor2 + (i as isize)* tsm_stride_1_tensor2)})})). sum ::< i32 > ()* (* unsafe {& * tsm_ptr_tensor3 . offset ((i as isize)* tsm_stride_0_tensor3)})
+                };
+                unsafe {tsm_res_ptr . write (tsm_value); tsm_res_ptr = tsm_res_ptr . add (1);}
+            };
+            unsafe {tsm_res . assume_init ()}
         } "##
     );
 }
