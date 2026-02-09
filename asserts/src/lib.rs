@@ -29,82 +29,74 @@ macro_rules! equivalent {
     }
 }
 
-const MAX_PREFIX_LEN: usize = 20;
-const LINE_LEN: usize = 100;
-
 pub fn __equivalent(a: &str, b: &str) -> std::result::Result<(), String> {
-    let a = simplify(a);
-    let b = simplify(b);
+    let mut a = decompose(a);
+    let mut b = decompose(b);
 
-    let min_length = a.len().min(b.len());
-    let mut divergence_index: Option<usize> = None;
-    for i in 0..min_length {
-        if a[i] != b[i] {
-            divergence_index = Some(i);
-            break;
+    loop {
+        let x = a.next();
+        let y = b.next();
+        match (x, y) {
+            (None, None) => break Ok(()),
+            (None, Some(y)) => {
+                let message = format!(
+                    "assertion `left == right` failed\n  left:\n right: {}\n",
+                    plug(y, b)
+                );
+                break Err(message)
+            }
+            (Some(x), None) => {
+                let message = format!(
+                    "assertion `left == right` failed\n  left: {}\n right:\n",
+                    plug(x, a)
+                );
+                break Err(message)
+            }
+            (Some(x), Some(y)) => {
+                if x != y {
+                    let message = format!(
+                        "assertion `left == right` failed\n  left: {}\n right: {}\n",
+                        plug(x, a),
+                        plug(y, b)
+                    );
+                    break Err(message)
+                }
+            }
         }
     }
-
-    let divergence_index: usize = match divergence_index {
-        None => if a.len() == b.len() { return Ok(()) } else { min_length },
-        Some(div) => div,
-    };
-
-    let start_index;
-    let arrow_index;
-
-    if MAX_PREFIX_LEN < divergence_index {
-        start_index = divergence_index - MAX_PREFIX_LEN;
-        arrow_index = MAX_PREFIX_LEN;
-    } else {
-        start_index = 0;
-        arrow_index = divergence_index;
-    }
-
-    let mut div = String::with_capacity(arrow_index);
-    for _ in 0..arrow_index { div.push(' ') }
-
-    let mut left = String::new();
-    for i in start_index..a.len().min(start_index + LINE_LEN) { left.push(a[i]); }
-
-    let mut right = String::new();
-    for i in start_index..b.len().min(start_index + LINE_LEN) { right.push(b[i]); }
-
-    let message = format!(
-        "assertion `left == right` failed\n  left: {}↓\n        {}\n right: {}↓\n        {}\n",
-        div, left, div, right
-    );
-
-    Err(message)
 }
 
-fn simplify(text: &str) -> Vec<char> {
-    let mut result = Vec::<char>::new();
-    let mut previous = '\0';
-    for c in text.chars() {
-        if c.is_whitespace() {
-            if previous != ' ' {
-                result.push(' ');
-            }
-            previous = ' ';
-        } else {
-            if is_opening(previous) {
-                result.push(' ');
-            }
-            else if previous != ' ' && is_closing(c) {
-                result.push(' ');
-            }
-            result.push(c);
-            previous = c;
+const THRESHOLD: usize = 100;
+
+fn plug<'a>(first: &'a str, rest: impl Iterator<Item=&'a str>) -> String {
+    let mut result = String::new();
+    result.push_str(first);
+    for part in rest {
+        if result.len() >= THRESHOLD {
+            break;
         }
+        result.push(' ');
+        result.push_str(part);
     }
     result
 }
 
-fn is_opening(c: char) -> bool {
-    c == '(' || c == '[' || c == '{' 
+fn decompose(text: &str) -> impl Iterator<Item=&str> {
+    text.split_whitespace().flat_map(decompose_block)
 }
 
-fn is_closing(c: char) -> bool {
-    c == ')' || c == ']' || c == '}' 
+fn decompose_block(text: &str) -> Vec<&str> {
+    let mut result = Vec::new();
+    let mut last = 0;
+    for (index, matched) in text.match_indices(|c: char| c.is_ascii_punctuation()) {
+        if last != index {
+            result.push(&text[last..index]);
+        }
+        result.push(matched);
+        last = index + matched.len();
+    }
+    if last < text.len() {
+        result.push(&text[last..]);
+    }
+    result
 }

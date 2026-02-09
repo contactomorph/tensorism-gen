@@ -8,11 +8,11 @@ fn simple_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor);
-            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
+            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor);
+            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
                 dim_number_0,
                 | i | {
-                    (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor, i) }) + i
+                    (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor, i) }) + i
                 }
             )
         } "
@@ -23,12 +23,12 @@ fn simple_lambda_format() {
     asserts::equivalent!(
         format,
         r"{
-            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).0;
-            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor).1;
-            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 2usize] >> :: from_shape_fn(
+            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor).0;
+            let dim_number_1 = ::ndarray::ArrayBase::<_, _>::dim(&tensor).1;
+            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 2usize]>>::from_shape_fn(
                 (dim_number_0, dim_number_1, ),
                 | (i, j,) | {
-                    (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor, (i, j,)) })
+                    (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor, (i, j,)) })
                 }
             )
         } "
@@ -59,23 +59,23 @@ fn layered_lambda_format() {
     asserts::equivalent!(
         format,
         r##"{
-            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
-            let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2).0;
-            let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
-            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 {
-                panic! ( "Dimensions are not matching between tensor1[ i, _ ] and tensor2[ _, i ]" );
+            let dim_number_1 = ::ndarray::ArrayBase::<_, _>::dim(&tensor1).1;
+            let dim_number_2 = ::ndarray::ArrayBase::<_, _>::dim(&tensor2).0;
+            let dim_number_0 = ::ndarray::ArrayBase::<_, _>::dim(&tensor1).0;
+            if dim_number_0 != ::ndarray::ArrayBase::<_, _>::dim( &tensor2 ).1 {
+                panic!( "Dimensions are not matching between tensor1[ i, _ ] and tensor2[ _, i ]" );
             }
-            if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 ) {
-                panic! ( "Dimensions are not matching between tensor1[ i, _ ] and tensor3[ i ]" );
+            if dim_number_0 != ::ndarray::ArrayBase::<_, _>::dim( &tensor3 ) {
+                panic!( "Dimensions are not matching between tensor1[ i, _ ] and tensor3[ i ]" );
             }
-            :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
+            ::ndarray::Array::<_, ::ndarray::Dim<[::ndarray::Ix; 1usize]>>::from_shape_fn(
                 dim_number_0,
                 | i | {
                     (
-                        (0usize .. dim_number_1).map(| j | { (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor1, (i, j,)) }) })
-                    ).sum ::< i32 > () + (
-                        (0usize .. dim_number_2).map(| j | { (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor2, (j, i,)) }) })
-                    ).sum ::< i32 > () * (* unsafe { :: ndarray :: ArrayRef :: < _, _ > :: uget(& tensor3, i) })
+                        (0usize .. dim_number_1).map(| j | { (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor1, (i, j,)) }) })
+                    ).sum::< i32 > () + (
+                        (0usize .. dim_number_2).map(| j | { (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor2, (j, i,)) }) })
+                    ).sum::< i32 > () * (* unsafe { ::ndarray::ArrayRef::<_, _>::uget(&tensor3, i) })
                 }
             )
         } "##
