@@ -7,8 +7,11 @@ fn filter_lambda_format() {
 
     asserts::equivalent!(
         format,
-        r"{
-            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).1;
+        r#"{
+            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor2);
+            if dim_number_1 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).1 {
+                panic! ("Dimensions are not matching between tensor2[ j ] and tensor1[ _, j ]");
+            }
             let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim(& tensor1).0;
             :: ndarray :: Array :: < _, :: ndarray :: Dim < [:: ndarray :: Ix; 1usize] >> :: from_shape_fn(
                 dim_number_0,
@@ -22,7 +25,7 @@ fn filter_lambda_format() {
                     ).sum ::< i32 > ( ) + i as i32
                 }
             )
-        } "
+        } "#
     );
 
     let format = format_new_ndarray!(for i => (for j k if tensor3[j] < tensor4[k] => tensor1[i, j] * tensor2[i, k]).sum::<f64>());
@@ -30,8 +33,14 @@ fn filter_lambda_format() {
     asserts::equivalent!(
         format,
         r##"{
-            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).1;
-            let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1;
+            let dim_number_1 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor3 );
+            if dim_number_1 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).1 {
+                panic! ("Dimensions are not matching between tensor3[ j ] and tensor1[ _, j ]");
+            }
+            let dim_number_2 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor4 );
+            if dim_number_2 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).1 {
+                panic! ("Dimensions are not matching between tensor4[ k ] and tensor2[ _, k ]");
+            }
             let dim_number_0 = :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor1 ).0;
             if dim_number_0 != :: ndarray :: ArrayBase :: < _, _ > :: dim( & tensor2 ).0 {
                 panic! ("Dimensions are not matching between tensor1[ i, _ ] and tensor2[ i, _ ]");

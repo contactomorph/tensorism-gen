@@ -6,11 +6,8 @@ use crate::analysis::types::{
     InspectionCollector,
 };
 use crate::model::header::RicciAliasDeclaration;
-use crate::model::lambda::RicciLambda;
-use crate::model::{
-    header::RicciIndexer,
-    lambda::{RicciGroup, RicciSegment},
-};
+use crate::model::header::RicciIndexer;
+use crate::model::lambda::{RicciGroup, RicciLambda, RicciSegment};
 
 fn create_unknown_index_error(index: &Ident) -> Result<(), syn::Error> {
     Err(syn::Error::new_spanned(
@@ -181,6 +178,9 @@ fn inspect_lambda(
     for declaration in &lambda.alias_declarations {
         inspect_alias_declaration(declaration, collector)?;
         new_indexes.push(declaration.index.clone());
+    }
+    if let Some(filter) = &lambda.filter {
+        inspect_segments(&filter.segments, collector)?;
     }
     inspect_segments(&lambda.body.segments, collector)?;
     let mut lonely_indexes = Vec::<Ident>::new();
